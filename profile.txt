@@ -8,7 +8,7 @@ name=Michelle Jaeger
 
 title1=Student in Marketing Intelligence (2025-2027)
 
-title2=Bachelor in BW / Media Management & Advertising Psychology (2020-2024)
+title2=Bachelor in Media Management & Advertising Psychology (2020-2024)
 
 expertise=Digital Marketing, E-Commerce
 
@@ -17,7 +17,7 @@ education=M.Sc. Marketing Intelligence, Pforzheim University
 email=jaegermm@hs-pforzheim.de
 linkedin=www.linkedin.com/in/michelle-jaeger-196830236
 
-about1=tbd
+about1=Michelle earned her B.Sc. in Media Management & Advertising Psychology from Pforzheim University, and her M.Sc. in Marketing Intelligence in 2027 from Pforzheim University as well.
 about2=
 about3=
 about4=
