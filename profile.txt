@@ -8,11 +8,11 @@ name=Michelle Jaeger
 
 title1=Student in Marketing Intelligence (2025-2027)
 
-title2=
+title2=Bachelor in BW / Media Management & Advertising Psychology
 
 expertise=Digital Marketing, E-Commerce
 
-education=Master Marketing Intelligence, Pforzheim University
+education=M.Sc. Marketing Intelligence, Pforzheim University
 
 email=jaegermm@hs-pforzheim.de
 linkedin=www.linkedin.com/in/michelle-jaeger-196830236
@@ -20,6 +20,7 @@ linkedin=www.linkedin.com/in/michelle-jaeger-196830236
 about1=tbd
 about2=
 about3=
+about4=
 
 phone=
 
