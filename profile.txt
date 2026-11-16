@@ -6,11 +6,11 @@
 
 name=Michelle Jaeger
 
-title1=tbd
+title1=Student in Marketing Intelligence (2025-2027)
 
-title2=tbd
+title2=
 
-expertise=Digital Marketing, ...
+expertise=Digital Marketing, E-Commerce
 
 education=Master Marketing Intelligence, Pforzheim University
 
@@ -18,9 +18,9 @@ email=jaegermm@hs-pforzheim.de
 linkedin=www.linkedin.com/in/michelle-jaeger-196830236
 
 about1=tbd
-about2=tbd
-about3=tbd
+about2=
+about3=
 
-phone=xxx
+phone=
 
 location=Hamburg
