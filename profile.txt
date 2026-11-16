@@ -8,7 +8,7 @@ name=Michelle Jaeger
 
 title1=Student in Marketing Intelligence (2025-2027)
 
-title2=Bachelor in BW / Media Management & Advertising Psychology
+title2=Bachelor in BW / Media Management & Advertising Psychology (2020-2024)
 
 expertise=Digital Marketing, E-Commerce
 
