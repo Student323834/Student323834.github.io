@@ -1,0 +1,1694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>A Little Bit of Magic • MediaPipe 3D Hand Gestures</title>
+  
+  <!-- Google Fonts: Elegant script for subtitle, clean sans-serif for UI, and mono for metrics -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Poppins:wght@300;400;500&family=Quicksand:wght@300;400;500&display=swap" rel="stylesheet">
+
+  <style>
+    /* ==========================================================================
+       RESET & ROOT STYLES
+       ========================================================================== */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 45%, #0a0e24 0%, #05060f 80%, #020307 100%);
+      color: #f8fafc;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    /* Three.js full-screen canvas */
+    #threeCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      display: block;
+    }
+
+    /* ==========================================================================
+       HEADER: COMPACT 3-LINE CENTERED BANNER
+       ========================================================================== */
+    .magic-header {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      text-align: center;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      max-width: 90vw;
+    }
+
+    /* Line 1: Gradient text with soft neon glow */
+    .magic-header h1 {
+      font-size: clamp(1.4rem, 3.2vw, 2.3rem);
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      background: linear-gradient(135deg, #60a5fa 0%, #c084fc 50%, #f472b6 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      filter: drop-shadow(0 0 20px rgba(192, 132, 252, 0.45));
+      line-height: 1.15;
+    }
+
+    /* Line 2: Calm, clean modern sans-serif (light weight, gentle fade & subtle pulsing) */
+    .magic-header .sub-script {
+      font-family: 'Poppins', 'Quicksand', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: clamp(0.95rem, 1.8vw, 1.25rem);
+      font-weight: 300;
+      color: #e0d7ff;
+      letter-spacing: 0.15em;
+      text-shadow: 0 0 10px rgba(224, 215, 255, 0.45);
+      animation: subtlePulse 4s ease-in-out infinite;
+    }
+
+    /* Line 3: Author attribution */
+    .magic-header .author-tag {
+      font-size: clamp(0.7rem, 1.2vw, 0.8rem);
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      color: rgba(226, 232, 240, 0.55);
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    @keyframes subtlePulse {
+      0%, 100% {
+        opacity: 0.85;
+        text-shadow: 0 0 8px rgba(224, 215, 255, 0.35);
+        transform: scale(1);
+      }
+      50% {
+        opacity: 1;
+        text-shadow: 0 0 16px rgba(224, 215, 255, 0.65), 0 0 26px rgba(192, 132, 252, 0.3);
+        transform: scale(1.008);
+      }
+    }
+
+    /* ==========================================================================
+       BOTTOM-LEFT: GLASSMORPHISM INFO PANEL
+       ========================================================================== */
+    .glass-panel {
+      position: absolute;
+      bottom: 24px;
+      left: 24px;
+      z-index: 10;
+      width: clamp(280px, 24vw, 360px);
+      background: rgba(10, 14, 28, 0.68);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 18px;
+      padding: 18px 20px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), 0 0 1px rgba(255, 255, 255, 0.2) inset;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .glass-panel:hover {
+      background: rgba(14, 20, 38, 0.78);
+      border-color: rgba(96, 165, 250, 0.3);
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65), 0 0 20px rgba(96, 165, 250, 0.15);
+    }
+
+    /* Live Clock & FPS Row */
+    .clock-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 10px;
+    }
+
+    .clock-time {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #2dd4bf;
+      letter-spacing: 0.04em;
+      text-shadow: 0 0 12px rgba(45, 212, 191, 0.45);
+    }
+
+    .clock-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 3px;
+    }
+
+    .clock-date {
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: #94a3b8;
+      letter-spacing: 0.03em;
+    }
+
+    .fps-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.70rem;
+      font-weight: 600;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.28);
+      padding: 1px 7px;
+      border-radius: 999px;
+      letter-spacing: 0.05em;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .fps-dot {
+      width: 5px;
+      height: 5px;
+      background: #38bdf8;
+      border-radius: 50%;
+      box-shadow: 0 0 6px #38bdf8;
+    }
+
+    /* Status Items */
+    .stat-row {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .stat-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: #cbd5e1;
+    }
+
+    .stat-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+    }
+
+    /* Hand Status Tag */
+    .hand-state-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.74rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 6px;
+      letter-spacing: 0.02em;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .hand-state-tag.open {
+      color: #34d399;
+      background: rgba(52, 211, 153, 0.15);
+      border: 1px solid rgba(52, 211, 153, 0.35);
+      box-shadow: 0 0 10px rgba(52, 211, 153, 0.2);
+    }
+
+    .hand-state-tag.fist {
+      color: #fb923c;
+      background: rgba(251, 146, 60, 0.15);
+      border: 1px solid rgba(251, 146, 60, 0.35);
+      box-shadow: 0 0 10px rgba(251, 146, 60, 0.2);
+    }
+
+    .hand-state-tag.none {
+      color: #94a3b8;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      font-weight: 400;
+    }
+
+    /* Progress bar */
+    .bar-track {
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .bar-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #14b8a6 0%, #3b82f6 50%, #a855f7 100%);
+      transition: width 0.12s ease-out;
+      box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+    }
+
+    /* Shape & Color Tag */
+    .shape-color-tag {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 7px 12px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      font-size: 0.8rem;
+    }
+
+    .shape-color-tag .tag-highlight {
+      font-weight: 700;
+      color: #f1f5f9;
+      letter-spacing: 0.02em;
+    }
+
+    /* Hint text */
+    .hint-card {
+      font-size: 0.73rem;
+      line-height: 1.4;
+      color: #94a3b8;
+      background: rgba(59, 130, 246, 0.06);
+      border-left: 3px solid #60a5fa;
+      padding: 6px 10px;
+      border-radius: 4px;
+      margin-top: 2px;
+    }
+
+    /* ==========================================================================
+       BOTTOM-RIGHT: MIRRORED WEBCAM & OVERLAY CANVAS
+       ========================================================================== */
+    .cam-wrapper {
+      position: absolute;
+      bottom: 24px;
+      right: 24px;
+      z-index: 10;
+      width: clamp(230px, 24vw, 360px);
+      aspect-ratio: 4 / 3;
+      border-radius: 18px;
+      overflow: hidden;
+      border: 2px solid rgba(20, 184, 166, 0.65);
+      box-shadow: 0 0 24px rgba(20, 184, 166, 0.3), 0 12px 36px rgba(0, 0, 0, 0.6);
+      background: #000;
+      transition: all 0.3s ease;
+    }
+
+    .cam-wrapper:hover {
+      border-color: rgba(45, 212, 191, 0.95);
+      box-shadow: 0 0 32px rgba(45, 212, 191, 0.45), 0 16px 48px rgba(0, 0, 0, 0.7);
+    }
+
+    /* Both video and canvas are mirrored horizontally for a natural selfie mirror */
+    #webcam, #overlayCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+    }
+
+    #webcam {
+      z-index: 1;
+      opacity: 0.92;
+    }
+
+    #overlayCanvas {
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .cam-badge {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 3;
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      background: rgba(10, 14, 28, 0.75);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(20, 184, 166, 0.4);
+      padding: 3px 8px;
+      border-radius: 999px;
+      color: #2dd4bf;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .rec-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #2dd4bf;
+      box-shadow: 0 0 6px #2dd4bf;
+      animation: blink 1.4s infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* ==========================================================================
+       START MODAL & LOADING SPINNER
+       ========================================================================== */
+    .modal-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 50;
+      background: radial-gradient(circle at center, rgba(10, 14, 30, 0.92) 0%, rgba(2, 4, 10, 0.98) 100%);
+      backdrop-filter: blur(12px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      transition: opacity 0.4s ease, visibility 0.4s ease;
+    }
+
+    .modal-card {
+      max-width: 460px;
+      width: 100%;
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 24px;
+      padding: 32px 28px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(96, 165, 250, 0.15);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .modal-card h2 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #60a5fa, #c084fc, #f472b6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .modal-card p {
+      font-size: 0.9rem;
+      line-height: 1.5;
+      color: #94a3b8;
+    }
+
+    .btn-start {
+      background: linear-gradient(135deg, #2563eb, #7c3aed);
+      color: #fff;
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      border: none;
+      border-radius: 999px;
+      padding: 14px 34px;
+      cursor: pointer;
+      box-shadow: 0 6px 20px rgba(124, 58, 237, 0.45), 0 0 2px rgba(255, 255, 255, 0.5) inset;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn-start:hover {
+      transform: translateY(-2px) scale(1.03);
+      box-shadow: 0 10px 28px rgba(124, 58, 237, 0.65), 0 0 20px rgba(96, 165, 250, 0.5);
+    }
+
+    .btn-start:active {
+      transform: translateY(1px) scale(0.98);
+    }
+
+    /* Loading status */
+    .loading-box {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 3px solid rgba(96, 165, 250, 0.2);
+      border-top-color: #60a5fa;
+      border-right-color: #c084fc;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-msg {
+      font-size: 0.86rem;
+      color: #cbd5e1;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .error-msg {
+      display: none;
+      color: #f87171;
+      font-size: 0.85rem;
+      line-height: 1.4;
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 10px;
+      padding: 10px 14px;
+      text-align: left;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+      .glass-panel {
+        bottom: 16px;
+        left: 16px;
+        width: calc(100vw - 32px);
+        max-width: 320px;
+      }
+      .cam-wrapper {
+        bottom: 16px;
+        right: 16px;
+        width: 140px;
+      }
+      .magic-header {
+        top: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Three.js Canvas -->
+  <canvas id="threeCanvas"></canvas>
+
+  <!-- Centered Top Header -->
+  <header class="magic-header">
+    <h1>A Little Bit of Magic</h1>
+    <div class="sub-script">wave your hand &amp; enjoy</div>
+    <div class="author-tag">by Michelle (323834)</div>
+  </header>
+
+  <!-- Bottom-Left Glassmorphism Info Panel -->
+  <section class="glass-panel" aria-label="Gesture and Animation Telemetry">
+    <div class="clock-row">
+      <div class="clock-time" id="clockTime">00:00:00</div>
+      <div class="clock-meta">
+        <div class="clock-date" id="clockDate">2026-11-18 Wed</div>
+        <div class="fps-badge" id="fpsBadge"><span class="fps-dot"></span><span id="fpsVal">--</span> FPS</div>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-header">
+        <span>Left Hand</span>
+        <span class="hand-state-tag none" id="leftHandTag">Not detected</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill" id="leftOpennessFill"></div>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-header">
+        <span>Right Hand</span>
+        <span class="hand-state-tag none" id="rightHandTag">Not detected</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill" id="rightOpennessFill"></div>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-header">
+        <span>Distance to Screen</span>
+        <span class="stat-val" id="distanceVal">--</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill" id="distanceFill" style="background: linear-gradient(90deg, #ec4899, #8b5cf6);"></div>
+      </div>
+    </div>
+
+    <div class="shape-color-tag">
+      <div>Shape: <span class="tag-highlight" id="shapeLabel">Heart</span></div>
+      <div>Color: <span class="tag-highlight" id="colorLabel">Blue</span></div>
+    </div>
+
+    <div class="hint-card">
+      💡 <strong>Open your hand to make it sparkle ✨</strong> | Move closer to make it bigger
+    </div>
+  </section>
+
+  <!-- Bottom-Right Mirrored Webcam & Landmark Canvas -->
+  <aside class="cam-wrapper" aria-label="Webcam Preview with MediaPipe Overlays">
+    <div class="cam-badge">
+      <span class="rec-dot"></span>
+      <span>Tracking AI</span>
+    </div>
+    <video id="webcam" playsinline muted autoplay></video>
+    <canvas id="overlayCanvas"></canvas>
+  </aside>
+
+  <!-- Initial User Gesture & Loading Modal -->
+  <div class="modal-overlay" id="startModal">
+    <div class="modal-card">
+      <h2>Welcome to the Magic</h2>
+      <p>
+        Experience an interactive 3D particle universe reacting live to your hand gestures using
+        <strong>MediaPipe Hand, Face &amp; Pose</strong> and <strong>Three.js</strong>.
+      </p>
+
+      <button type="button" class="btn-start" id="startBtn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+        </svg>
+        Start Camera &amp; Magic
+      </button>
+
+      <div class="loading-box" id="loadingBox">
+        <div class="spinner"></div>
+        <div class="loading-msg" id="loadingMsg">Loading MediaPipe Models...</div>
+      </div>
+
+      <div class="error-msg" id="errorMsg"></div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MAIN JAVASCRIPT MODULE (CDN-BASED, SELF-CONTAINED)
+       ========================================================================== -->
+  <script type="module">
+    // Load Three.js and MediaPipe Tasks Vision directly from CDNs (ES Modules)
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+    import {
+      FilesetResolver,
+      HandLandmarker,
+      FaceLandmarker,
+      PoseLandmarker
+    } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+
+    /* ==========================================================================
+       1. GLOBAL STATE & CONFIGURATION
+       ========================================================================== */
+    const PARTICLE_COUNT = 4000;
+    const SHAPE_NAMES = ["Heart", "Butterfly", "Galaxy Sphere", "5-Point Star", "Rose Curve", "Saturn"];
+    const COLOR_PALETTES = [
+      { name: "Blue",   h: 0.60, s: 0.85, l: 0.60, rgb: [0.25, 0.55, 1.0] },
+      { name: "Purple", h: 0.77, s: 0.90, l: 0.65, rgb: [0.72, 0.35, 1.0] },
+      { name: "Pink",   h: 0.92, s: 0.88, l: 0.65, rgb: [1.00, 0.35, 0.7] },
+      { name: "Teal",   h: 0.48, s: 0.90, l: 0.55, rgb: [0.12, 0.85, 0.75] },
+      { name: "Gold",   h: 0.12, s: 0.95, l: 0.55, rgb: [1.00, 0.75, 0.15] },
+      { name: "Red",    h: 0.98, s: 0.90, l: 0.58, rgb: [1.00, 0.28, 0.35] }
+    ];
+
+    let currentShapeIndex = 0;
+    let currentColorIndex = 0;
+
+    // Dual Hand Tracking State (Independent metrics with responsive smoothing ~0.55)
+    const handsData = {
+      left: {
+        detected: false,
+        rawOpenness: 70.0,
+        smoothedOpenness: 70.0,
+        rawDistance: 0.20,
+        smoothedDistance: 0.20,
+        palmPos: { x: -0.4, y: 0.0 },
+        state: "OPEN",
+        lastState: "OPEN"
+      },
+      right: {
+        detected: false,
+        rawOpenness: 70.0,
+        smoothedOpenness: 70.0,
+        rawDistance: 0.20,
+        smoothedDistance: 0.20,
+        palmPos: { x: 0.4, y: 0.0 },
+        state: "OPEN",
+        lastState: "OPEN"
+      }
+    };
+
+    let effectiveOpenness = 60.0;
+    let effectiveDistance = 0.20;
+    let lastTransitionTime = 0; // Shared 400ms cooldown across both hands
+    let currentParticleScale = 1.0;
+    let currentStretchX = 1.0;
+
+    // MediaPipe Landmarkers & Detection Concurrency Lock
+    let handLandmarker = null;
+    let faceLandmarker = null;
+    let poseLandmarker = null;
+    let lastVideoTime = -1;
+    let isDetecting = false;
+    let frameCount = 0;
+    let enableSecondaryTracking = true; // Staggered or auto-disabled if performance drops
+    let cachedFaceResult = null;
+    let cachedPoseResult = null;
+
+    // FPS Telemetry
+    let frameTimes = [];
+    let lastFpsUpdateTime = 0;
+
+    // DOM Elements
+    const startModal = document.getElementById("startModal");
+    const startBtn = document.getElementById("startBtn");
+    const loadingBox = document.getElementById("loadingBox");
+    const loadingMsg = document.getElementById("loadingMsg");
+    const errorMsg = document.getElementById("errorMsg");
+    const video = document.getElementById("webcam");
+    const overlayCanvas = document.getElementById("overlayCanvas");
+    const overlayCtx = overlayCanvas.getContext("2d");
+
+    // UI Telemetry Elements
+    const clockTimeEl = document.getElementById("clockTime");
+    const clockDateEl = document.getElementById("clockDate");
+    const fpsValEl = document.getElementById("fpsVal");
+    const leftHandTag = document.getElementById("leftHandTag");
+    const leftOpennessFill = document.getElementById("leftOpennessFill");
+    const rightHandTag = document.getElementById("rightHandTag");
+    const rightOpennessFill = document.getElementById("rightOpennessFill");
+    const distanceValEl = document.getElementById("distanceVal");
+    const distanceFillEl = document.getElementById("distanceFill");
+    const shapeLabelEl = document.getElementById("shapeLabel");
+    const colorLabelEl = document.getElementById("colorLabel");
+
+    /* ==========================================================================
+       2. LIVE CLOCK (HH:MM:SS & YYYY-MM-DD Weekday)
+       ========================================================================== */
+    function updateClock() {
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, "0");
+      clockTimeEl.textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+      const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      clockDateEl.textContent = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${weekdays[now.getDay()]}`;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    /* ==========================================================================
+       3. THREE.JS PARTICLE ENGINE & PROCEDURAL SPRITE
+       ========================================================================== */
+    const threeCanvas = document.getElementById("threeCanvas");
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x05060f, 0.018);
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 0, 36);
+
+    const renderer = new THREE.WebGLRenderer({
+      canvas: threeCanvas,
+      antialias: true,
+      alpha: true,
+      powerPreference: "high-performance"
+    });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+
+    /**
+     * Create a soft circular radial glowing sprite texture in memory via HTML Canvas.
+     * Guarantees 0 external texture asset dependencies!
+     */
+    function createGlowSpriteTexture() {
+      const canvas = document.createElement("canvas");
+      canvas.width = 64;
+      canvas.height = 64;
+      const ctx = canvas.getContext("2d");
+      const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+      gradient.addColorStop(0.0, "rgba(255, 255, 255, 1.0)");
+      gradient.addColorStop(0.2, "rgba(255, 255, 255, 0.85)");
+      gradient.addColorStop(0.55, "rgba(255, 255, 255, 0.22)");
+      gradient.addColorStop(1.0, "rgba(255, 255, 255, 0.0)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 64, 64);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.needsUpdate = true;
+      return texture;
+    }
+
+    /* ==========================================================================
+       4. 3D PARAMETRIC SHAPE GENERATORS
+       Precomputes target Float32Array coordinates for smooth morphing.
+       ========================================================================== */
+    const shapes = [];
+
+    // Helper: random in range
+    const rand = (min, max) => min + Math.random() * (max - min);
+
+    // Shape 1: 3D Parametric Volumetric Heart
+    function generateHeart() {
+      const pos = new Float32Array(PARTICLE_COUNT * 3);
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const t = rand(0, Math.PI * 2);
+        // Parametric cardiod equations
+        const x = 16 * Math.pow(Math.sin(t), 3);
+        const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+        // 3D volume via spherical extrusion tapering towards bottom tip
+        const u = rand(-Math.PI / 2, Math.PI / 2);
+        const volumeDepth = Math.sin(u) * (1.0 - Math.abs(y) / 20) * 7.0;
+        const jitter = rand(0.85, 1.15);
+
+        pos[i * 3 + 0] = x * 0.9 * jitter;
+        pos[i * 3 + 1] = (y + 2.0) * 0.9 * jitter;
+        pos[i * 3 + 2] = volumeDepth * jitter;
+      }
+      return pos;
+    }
+
+    // Shape 2: 3D Butterfly (Fay's Wing Equation)
+    function generateButterfly() {
+      const pos = new Float32Array(PARTICLE_COUNT * 3);
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const t = rand(0, Math.PI * 12);
+        const r = Math.exp(Math.sin(t)) - 2 * Math.cos(4 * t) + Math.pow(Math.sin((2 * t - Math.PI) / 24), 5);
+        const scale = 5.2;
+        const x = scale * r * Math.sin(t);
+        const y = scale * r * Math.cos(t);
+        // 3D wing dihedral angle
+        const z = Math.pow(Math.abs(x), 1.15) * 0.28 * Math.sin(t * 0.5) + rand(-0.8, 0.8);
+
+        pos[i * 3 + 0] = x;
+        pos[i * 3 + 1] = y - 2.0;
+        pos[i * 3 + 2] = z;
+      }
+      return pos;
+    }
+
+    // Shape 3: Spiral Galaxy Cloud (Logarithmic Arms + Dense Core)
+    function generateGalaxySphere() {
+      const pos = new Float32Array(PARTICLE_COUNT * 3);
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        if (i < PARTICLE_COUNT * 0.25) {
+          // Central spherical core
+          const r = rand(0.5, 4.2);
+          const theta = rand(0, Math.PI * 2);
+          const phi = Math.acos(rand(-1, 1));
+          pos[i * 3 + 0] = r * Math.sin(phi) * Math.cos(theta);
+          pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta) * 0.7;
+          pos[i * 3 + 2] = r * Math.cos(phi);
+        } else {
+          // 3-Arm Logarithmic Spiral Disk
+          const arm = i % 3;
+          const u = Math.pow(Math.random(), 0.75);
+          const r = 3.5 + u * 17.0;
+          const theta = u * 4.2 + (arm * 2 * Math.PI) / 3;
+          const diskThickness = (1.0 - u) * 2.8 + 0.3;
+
+          pos[i * 3 + 0] = r * Math.cos(theta) + rand(-0.6, 0.6);
+          pos[i * 3 + 1] = rand(-diskThickness, diskThickness);
+          pos[i * 3 + 2] = r * Math.sin(theta) + rand(-0.6, 0.6);
+        }
+      }
+      return pos;
+    }
+
+    // Shape 4: 3D 5-Pointed Star Cluster
+    function generateStar() {
+      const pos = new Float32Array(PARTICLE_COUNT * 3);
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const theta = rand(0, Math.PI * 2);
+        // Modulated star radius
+        const rInner = 4.5;
+        const rOuter = 16.5;
+        const starMod = Math.pow(Math.cos(5 * theta / 2), 2);
+        const r = (rInner + (rOuter - rInner) * starMod) * Math.sqrt(Math.random());
+        const zThickness = (1.0 - r / rOuter) * 6.0;
+
+        pos[i * 3 + 0] = r * Math.cos(theta);
+        pos[i * 3 + 1] = r * Math.sin(theta);
+        pos[i * 3 + 2] = rand(-zThickness, zThickness);
+      }
+      return pos;
+    }
+
+    // Shape 5: 3D Flower / Rhodonea Rose Curve
+    function generateRoseCurve() {
+      const pos = new Float32Array(PARTICLE_COUNT * 3);
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const theta = rand(0, Math.PI * 2);
+        // 4-petal mathematical rose
+        const rMax = 15.0 * Math.abs(Math.sin(3 * theta));
+        const r = rMax * Math.pow(Math.random(), 0.6);
+        // Concave blooming chalice in Z
+        const z = Math.pow(r / 15.0, 1.8) * 8.0 - 3.5 + rand(-0.5, 0.5);
+
+        pos[i * 3 + 0] = r * Math.cos(theta);
+        pos[i * 3 + 1] = r * Math.sin(theta);
+        pos[i * 3 + 2] = z;
+      }
+      return pos;
+    }
+
+    // Shape 6: Saturn (Central Planet + Tilted Cassini Rings)
+    function generateSaturn() {
+      const pos = new Float32Array(PARTICLE_COUNT * 3);
+      const ringTilt = 28 * (Math.PI / 180);
+      const cosT = Math.cos(ringTilt);
+      const sinT = Math.sin(ringTilt);
+
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        if (i < PARTICLE_COUNT * 0.38) {
+          // Central Sphere
+          const r = 6.2 * Math.cbrt(Math.random());
+          const theta = rand(0, Math.PI * 2);
+          const phi = Math.acos(rand(-1, 1));
+          pos[i * 3 + 0] = r * Math.sin(phi) * Math.cos(theta);
+          pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+          pos[i * 3 + 2] = r * Math.cos(phi);
+        } else {
+          // Planar rings with Cassini Division gap
+          let r = rand(8.5, 18.5);
+          if (r > 12.8 && r < 14.0) {
+            // Push out of Cassini gap
+            r = Math.random() > 0.5 ? 12.6 : 14.2;
+          }
+          const theta = rand(0, Math.PI * 2);
+          const x0 = r * Math.cos(theta);
+          const y0 = rand(-0.25, 0.25);
+          const z0 = r * Math.sin(theta);
+
+          // Apply ring tilt around X axis
+          pos[i * 3 + 0] = x0;
+          pos[i * 3 + 1] = y0 * cosT - z0 * sinT;
+          pos[i * 3 + 2] = y0 * sinT + z0 * cosT;
+        }
+      }
+      return pos;
+    }
+
+    // Precompute all 6 target geometries
+    shapes.push(generateHeart());
+    shapes.push(generateButterfly());
+    shapes.push(generateGalaxySphere());
+    shapes.push(generateStar());
+    shapes.push(generateRoseCurve());
+    shapes.push(generateSaturn());
+
+    /* ==========================================================================
+       5. THREE.JS PARTICLE BUFFER GEOMETRY INITIALIZATION
+       ========================================================================== */
+    const geometry = new THREE.BufferGeometry();
+    const currentPositions = new Float32Array(PARTICLE_COUNT * 3);
+    const particleColors = new Float32Array(PARTICLE_COUNT * 3);
+    const particleBaseColors = new Float32Array(PARTICLE_COUNT * 3);
+    const particleVelocities = new Float32Array(PARTICLE_COUNT * 3);
+    const particlePhases = new Float32Array(PARTICLE_COUNT);
+    const particleBreakThresholds = new Float32Array(PARTICLE_COUNT);
+    const particleDriftOffsets = new Float32Array(PARTICLE_COUNT * 3);
+
+    // Initialize positions from Heart shape and precompute per-particle bloom thresholds
+    const initialShape = shapes[0];
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      currentPositions[i * 3 + 0] = initialShape[i * 3 + 0];
+      currentPositions[i * 3 + 1] = initialShape[i * 3 + 1];
+      currentPositions[i * 3 + 2] = initialShape[i * 3 + 2];
+      particleVelocities[i * 3 + 0] = 0.0;
+      particleVelocities[i * 3 + 1] = 0.0;
+      particleVelocities[i * 3 + 2] = 0.0;
+      particlePhases[i] = Math.random() * Math.PI * 2.0;
+
+      // Deterministic break-loose threshold (0.28 to 0.95):
+      // When openness > threshold, particle smoothly blooms outward into free-floating sparkles
+      particleBreakThresholds[i] = 0.28 + Math.pow(Math.random(), 1.35) * 0.67;
+
+      // Random 3D unit drift direction for organic sparkle trails
+      const u = Math.random() * 2.0 - 1.0;
+      const phi = Math.random() * Math.PI * 2.0;
+      const rad = Math.sqrt(Math.max(0, 1.0 - u * u));
+      particleDriftOffsets[i * 3 + 0] = rad * Math.cos(phi);
+      particleDriftOffsets[i * 3 + 1] = rad * Math.sin(phi);
+      particleDriftOffsets[i * 3 + 2] = u;
+    }
+
+    // Reusable color object to prevent GC pressure
+    const helperColor = new THREE.Color();
+
+    // Initialize colors from Palette with organic per-particle jitter
+    function applyColorPalette(paletteIndex) {
+      const pal = COLOR_PALETTES[paletteIndex];
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const h = (pal.h + rand(-0.06, 0.06) + 1.0) % 1.0;
+        const s = Math.min(1.0, pal.s + rand(-0.1, 0.1));
+        const l = Math.min(0.85, Math.max(0.35, pal.l + rand(-0.12, 0.12)));
+        helperColor.setHSL(h, s, l);
+
+        particleBaseColors[i * 3 + 0] = helperColor.r;
+        particleBaseColors[i * 3 + 1] = helperColor.g;
+        particleBaseColors[i * 3 + 2] = helperColor.b;
+
+        particleColors[i * 3 + 0] = helperColor.r;
+        particleColors[i * 3 + 1] = helperColor.g;
+        particleColors[i * 3 + 2] = helperColor.b;
+      }
+      geometry.attributes.color.needsUpdate = true;
+    }
+
+    geometry.setAttribute("position", new THREE.BufferAttribute(currentPositions, 3));
+    geometry.setAttribute("color", new THREE.BufferAttribute(particleColors, 3));
+
+    const particleMaterial = new THREE.PointsMaterial({
+      size: 1.15,
+      map: createGlowSpriteTexture(),
+      vertexColors: true,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false
+    });
+
+    const particleSystem = new THREE.Points(geometry, particleMaterial);
+    scene.add(particleSystem);
+
+    applyColorPalette(0);
+
+    /* ==========================================================================
+       6. EXPLOSION BURST IMPULSE
+       Triggered upon Fist → Open gesture transition.
+       ========================================================================== */
+    function triggerExplosionBurst() {
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const idx = i * 3;
+        const px = currentPositions[idx];
+        const py = currentPositions[idx + 1];
+        const pz = currentPositions[idx + 2];
+        const dist = Math.sqrt(px * px + py * py + pz * pz) || 1.0;
+
+        // Radial outward blast velocity + turbulent random vector
+        const blastForce = rand(16.0, 32.0);
+        particleVelocities[idx + 0] = (px / dist) * blastForce + rand(-4, 4);
+        particleVelocities[idx + 1] = (py / dist) * blastForce + rand(-4, 4);
+        particleVelocities[idx + 2] = (pz / dist) * blastForce + rand(-4, 4);
+      }
+    }
+
+    /* ==========================================================================
+       7. MATHEMATICAL GESTURE FORMULAS (EXPLAINABLE TO PROFESSOR)
+       ==========================================================================
+       Formula 1: Palm-Scale Invariance (S_palm)
+         To make finger measurements invariant to distance from the lens, we calculate
+         the Euclidean length of the palm reference vector between Landmark 0 (Wrist)
+         and Landmark 9 (Middle Finger MCP):
+           S_palm = sqrt((x9 - x0)^2 + (y9 - y0)^2 + (z9 - z0)^2)
+
+       Formula 2: Hand Openness Metric (Openness Ratio R)
+         We measure the Euclidean distance d_i from each fingertip i in {4, 8, 12, 16, 20}
+         to Landmark 0 (Wrist):
+           d_avg = (1 / 5) * sum_{i in Tips}( || p_i - p_0 || )
+           R = d_avg / S_palm
+         In a tight fist: fingertips curl to palm => R ~ 0.85 - 1.05 (0% openness).
+         In an open hand: fingertips extend => R ~ 1.90 - 2.50 (100% openness).
+         Smoothed via real-time EMA (alpha = 0.55) independently for each hand.
+
+       Formula 3: Mirrored Handedness Coordinate Mapping
+         MediaPipe outputs labels from the webcam sensor's physical frame. In a mirrored
+         selfie preview (standard UX), camera Left corresponds to user Right and vice-versa:
+           User_Hand = (MP_Label == "Left") ? "Right" : "Left"
+
+       Formula 4: Dynamic Blooming & Break-Loose Sparkle Cloud
+         Each particle i has an assigned threshold T_i in [0.28, 0.95]:
+           - If Openness <= T_i: Particle stays rigidly bound to the 3D parametric shape.
+             Fist (openness < 30%) pulls ALL particles into a crisp, tight, small shape.
+           - If Openness > T_i: Particle breaks loose, expanding radially with organic
+             harmonic drift and twinkling brightness.
+           - Fully open hand: wide sparkling cloud with the central shape glowing at the core.
+
+       Formula 5: Dual-Hand Proximity Scaling & Force Field Auras
+         Proximity Law: Closer hand (S_palm large) => Effect expands (scale up to 1.85x).
+         Farther hand (S_palm small) => Effect contracts.
+         Combined Scale = OpennessFactor * DistanceFactor.
+         Dual Hand Aura: Each palm projects an outward repulsive force field whose radius
+         and sparkle intensity expands with that hand's openness.
+       ========================================================================== */
+
+    function computeDistance3D(p1, p2) {
+      const dx = p1.x - p2.x;
+      const dy = p1.y - p2.y;
+      const dz = (p1.z || 0) - (p2.z || 0);
+      return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
+    function computeHandMetrics(landmarks) {
+      const wrist = landmarks[0];
+      const middleMCP = landmarks[9];
+      const palmScale = computeDistance3D(wrist, middleMCP) || 0.001;
+
+      const tipIndices = [4, 8, 12, 16, 20];
+      let sumTipDist = 0;
+      for (const idx of tipIndices) {
+        sumTipDist += computeDistance3D(landmarks[idx], wrist);
+      }
+      const avgTipDist = sumTipDist / 5.0;
+      const opennessRatio = avgTipDist / palmScale;
+      // Linear mapping: 0.95 -> 0%, 2.25 -> 100%
+      const rawOpenness = Math.max(0, Math.min(100, ((opennessRatio - 0.95) / 1.30) * 100));
+
+      // Palm center in normalized mirrored coordinates [-1, 1]
+      // In the mirrored view, horizontal X is flipped: x_mirrored = 1.0 - middleMCP.x
+      const normX = ((1.0 - middleMCP.x) - 0.5) * 2.0;
+      const normY = -(middleMCP.y - 0.5) * 2.0;
+
+      return { palmScale, rawOpenness, normX, normY };
+    }
+
+    function processAllHands(handResult) {
+      let leftDetected = false;
+      let rightDetected = false;
+
+      if (handResult && handResult.landmarks && handResult.landmarks.length > 0) {
+        const count = handResult.landmarks.length;
+
+        for (let i = 0; i < count; i++) {
+          const lms = handResult.landmarks[i];
+          const metrics = computeHandMetrics(lms);
+
+          // Determine handedness:
+          // MediaPipe labels are from the camera sensor view; swap Left/Right to match user real hands
+          let mpLabel = "Right";
+          if (handResult.handednesses && handResult.handednesses[i] && handResult.handednesses[i][0]) {
+            mpLabel = handResult.handednesses[i][0].categoryName || handResult.handednesses[i][0].displayName || "Right";
+          }
+          let userSide = mpLabel.toLowerCase().includes("left") ? "right" : "left";
+
+          // If both hands are detected, also confirm by horizontal position in mirrored view
+          if (count === 2) {
+            const m0 = computeHandMetrics(handResult.landmarks[0]);
+            const m1 = computeHandMetrics(handResult.landmarks[1]);
+            userSide = (i === 0) ? (m0.normX < m1.normX ? "left" : "right") : (m1.normX < m0.normX ? "left" : "right");
+          }
+
+          if (userSide === "left") leftDetected = true;
+          if (userSide === "right") rightDetected = true;
+
+          const hand = handsData[userSide];
+          const SMOOTH_ALPHA = 0.55;
+
+          hand.rawOpenness = metrics.rawOpenness;
+          hand.smoothedOpenness = hand.smoothedOpenness * (1.0 - SMOOTH_ALPHA) + metrics.rawOpenness * SMOOTH_ALPHA;
+
+          hand.rawDistance = metrics.palmScale;
+          hand.smoothedDistance = hand.smoothedDistance * (1.0 - SMOOTH_ALPHA) + metrics.palmScale * SMOOTH_ALPHA;
+
+          hand.palmPos.x = hand.palmPos.x * (1.0 - SMOOTH_ALPHA) + metrics.normX * SMOOTH_ALPHA;
+          hand.palmPos.y = hand.palmPos.y * (1.0 - SMOOTH_ALPHA) + metrics.normY * SMOOTH_ALPHA;
+          hand.detected = true;
+
+          // Schmitt Trigger Hysteresis (fist < 40%, open > 55%)
+          if (hand.state === "OPEN" && hand.smoothedOpenness < 40.0) {
+            hand.state = "FIST";
+          } else if (hand.state === "FIST" && hand.smoothedOpenness > 55.0) {
+            hand.state = "OPEN";
+          }
+
+          // Fist -> Open transition event (shared 400ms cooldown across both hands)
+          const now = Date.now();
+          if (hand.lastState === "FIST" && hand.state === "OPEN" && now - lastTransitionTime > 400) {
+            lastTransitionTime = now;
+            currentShapeIndex = (currentShapeIndex + 1) % shapes.length;
+            currentColorIndex = (currentColorIndex + 1) % COLOR_PALETTES.length;
+            applyColorPalette(currentColorIndex);
+            triggerExplosionBurst();
+
+            shapeLabelEl.textContent = SHAPE_NAMES[currentShapeIndex];
+            colorLabelEl.textContent = COLOR_PALETTES[currentColorIndex].name;
+          }
+          hand.lastState = hand.state;
+        }
+      }
+
+      // Smooth drift back for un-detected hands
+      if (!leftDetected) {
+        handsData.left.detected = false;
+        handsData.left.smoothedOpenness = handsData.left.smoothedOpenness * 0.90 + 70.0 * 0.10;
+        handsData.left.smoothedDistance = handsData.left.smoothedDistance * 0.90 + 0.20 * 0.10;
+        handsData.left.palmPos.x *= 0.85;
+        handsData.left.palmPos.y *= 0.85;
+        handsData.left.state = "OPEN";
+        handsData.left.lastState = "OPEN";
+      }
+      if (!rightDetected) {
+        handsData.right.detected = false;
+        handsData.right.smoothedOpenness = handsData.right.smoothedOpenness * 0.90 + 70.0 * 0.10;
+        handsData.right.smoothedDistance = handsData.right.smoothedDistance * 0.90 + 0.20 * 0.10;
+        handsData.right.palmPos.x *= 0.85;
+        handsData.right.palmPos.y *= 0.85;
+        handsData.right.state = "OPEN";
+        handsData.right.lastState = "OPEN";
+      }
+
+      // Update Left Hand Info Panel UI
+      if (handsData.left.detected) {
+        const icon = handsData.left.state === "OPEN" ? "✋ Open" : "✊ Fist";
+        leftHandTag.className = `hand-state-tag ${handsData.left.state.toLowerCase()}`;
+        leftHandTag.textContent = `${icon} ${Math.round(handsData.left.smoothedOpenness)}%`;
+        leftOpennessFill.style.width = `${handsData.left.smoothedOpenness}%`;
+      } else {
+        leftHandTag.className = "hand-state-tag none";
+        leftHandTag.textContent = "Not detected";
+        leftOpennessFill.style.width = "0%";
+      }
+
+      // Update Right Hand Info Panel UI
+      if (handsData.right.detected) {
+        const icon = handsData.right.state === "OPEN" ? "✋ Open" : "✊ Fist";
+        rightHandTag.className = `hand-state-tag ${handsData.right.state.toLowerCase()}`;
+        rightHandTag.textContent = `${icon} ${Math.round(handsData.right.smoothedOpenness)}%`;
+        rightOpennessFill.style.width = `${handsData.right.smoothedOpenness}%`;
+      } else {
+        rightHandTag.className = "hand-state-tag none";
+        rightHandTag.textContent = "Not detected";
+        rightOpennessFill.style.width = "0%";
+      }
+
+      // Calculate Combined Effective Metrics
+      if (handsData.left.detected && handsData.right.detected) {
+        effectiveOpenness = (handsData.left.smoothedOpenness + handsData.right.smoothedOpenness) * 0.5;
+        effectiveDistance = (handsData.left.smoothedDistance + handsData.right.smoothedDistance) * 0.5;
+      } else if (handsData.left.detected) {
+        effectiveOpenness = handsData.left.smoothedOpenness;
+        effectiveDistance = handsData.left.smoothedDistance;
+      } else if (handsData.right.detected) {
+        effectiveOpenness = handsData.right.smoothedOpenness;
+        effectiveDistance = handsData.right.smoothedDistance;
+      } else {
+        effectiveOpenness = effectiveOpenness * 0.95 + 60.0 * 0.05;
+        effectiveDistance = effectiveDistance * 0.95 + 0.20 * 0.05;
+      }
+
+      // Update Distance UI & Progress Bar
+      if (handsData.left.detected || handsData.right.detected) {
+        let distCategory = "Medium";
+        let distPct = 50;
+        if (effectiveDistance > 0.25) {
+          distCategory = "Near";
+          distPct = Math.min(100, 70 + ((effectiveDistance - 0.25) / 0.18) * 30);
+        } else if (effectiveDistance < 0.15) {
+          distCategory = "Far";
+          distPct = Math.max(0, (effectiveDistance / 0.15) * 40);
+        } else {
+          distCategory = "Medium";
+          distPct = 40 + ((effectiveDistance - 0.15) / 0.10) * 30;
+        }
+        distanceValEl.textContent = distCategory;
+        distanceFillEl.style.width = `${distPct}%`;
+      } else {
+        distanceValEl.textContent = "--";
+        distanceFillEl.style.width = "0%";
+      }
+    }
+
+    /* ==========================================================================
+       8. WEBCAM LANDMARK OVERLAY CANVAS DRAWING
+       Draws Hand skeleton (cyan/white), Face contours (pink), Pose shoulders/arms (yellow/green)
+       ========================================================================== */
+    const HAND_CONNECTIONS = [
+      [0, 1], [1, 2], [2, 3], [3, 4],       // Thumb
+      [0, 5], [5, 6], [6, 7], [7, 8],       // Index
+      [5, 9], [9, 10], [10, 11], [11, 12],  // Middle
+      [9, 13], [13, 14], [14, 15], [15, 16],// Ring
+      [13, 17], [17, 18], [18, 19], [19, 20], // Pinky
+      [0, 17]                               // Palm base
+    ];
+
+    // Key face landmark contours for light aesthetic overlay
+    const FACE_CONTOURS = {
+      leftEyebrow: [70, 63, 105, 66, 107],
+      rightEyebrow: [336, 296, 334, 293, 300],
+      noseBridge: [168, 6, 197, 195, 5, 4],
+      outerLips: [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 61]
+    };
+
+    function drawWebcamOverlays(handResult, faceResult, poseResult) {
+      const w = overlayCanvas.width;
+      const h = overlayCanvas.height;
+      overlayCtx.clearRect(0, 0, w, h);
+
+      // A. Draw Pose (Shoulders in Yellow, Arms in Green)
+      if (poseResult && poseResult.landmarks && poseResult.landmarks[0]) {
+        const pose = poseResult.landmarks[0];
+        const leftShoulder = pose[11];
+        const rightShoulder = pose[12];
+        const leftElbow = pose[13];
+        const rightElbow = pose[14];
+        const leftWrist = pose[15];
+        const rightWrist = pose[16];
+
+        overlayCtx.lineWidth = 3;
+        overlayCtx.lineCap = "round";
+
+        // Shoulder line: Bright Yellow
+        if (leftShoulder && rightShoulder && leftShoulder.visibility > 0.4 && rightShoulder.visibility > 0.4) {
+          overlayCtx.strokeStyle = "#facc15";
+          overlayCtx.beginPath();
+          overlayCtx.moveTo(leftShoulder.x * w, leftShoulder.y * h);
+          overlayCtx.lineTo(rightShoulder.x * w, rightShoulder.y * h);
+          overlayCtx.stroke();
+        }
+
+        // Arm lines: Bright Green
+        overlayCtx.strokeStyle = "#4ade80";
+        if (leftShoulder && leftElbow && leftWrist) {
+          overlayCtx.beginPath();
+          overlayCtx.moveTo(leftShoulder.x * w, leftShoulder.y * h);
+          overlayCtx.lineTo(leftElbow.x * w, leftElbow.y * h);
+          overlayCtx.lineTo(leftWrist.x * w, leftWrist.y * h);
+          overlayCtx.stroke();
+        }
+        if (rightShoulder && rightElbow && rightWrist) {
+          overlayCtx.beginPath();
+          overlayCtx.moveTo(rightShoulder.x * w, rightShoulder.y * h);
+          overlayCtx.lineTo(rightElbow.x * w, rightElbow.y * h);
+          overlayCtx.lineTo(rightWrist.x * w, rightWrist.y * h);
+          overlayCtx.stroke();
+        }
+      }
+
+      // B. Draw Face Features in Soft Neon Pink
+      if (faceResult && faceResult.faceLandmarks && faceResult.faceLandmarks[0]) {
+        const face = faceResult.faceLandmarks[0];
+        overlayCtx.strokeStyle = "rgba(244, 114, 182, 0.85)";
+        overlayCtx.lineWidth = 1.8;
+        overlayCtx.lineCap = "round";
+
+        for (const contourKey in FACE_CONTOURS) {
+          const indices = FACE_CONTOURS[contourKey];
+          overlayCtx.beginPath();
+          indices.forEach((idx, i) => {
+            const pt = face[idx];
+            if (pt) {
+              const x = pt.x * w;
+              const y = pt.y * h;
+              if (i === 0) overlayCtx.moveTo(x, y);
+              else overlayCtx.lineTo(x, y);
+            }
+          });
+          overlayCtx.stroke();
+        }
+      }
+
+      // C. Draw Hand Landmarks & Skeleton in Cyan / White
+      if (handResult && handResult.landmarks) {
+        for (const hand of handResult.landmarks) {
+          // Skeleton bones in glowing cyan
+          overlayCtx.strokeStyle = "rgba(34, 211, 238, 0.9)";
+          overlayCtx.lineWidth = 2.4;
+          for (const [start, end] of HAND_CONNECTIONS) {
+            const p1 = hand[start];
+            const p2 = hand[end];
+            overlayCtx.beginPath();
+            overlayCtx.moveTo(p1.x * w, p1.y * h);
+            overlayCtx.lineTo(p2.x * w, p2.y * h);
+            overlayCtx.stroke();
+          }
+
+          // Joints in white with cyan border
+          for (let i = 0; i < hand.length; i++) {
+            const pt = hand[i];
+            const x = pt.x * w;
+            const y = pt.y * h;
+            const r = (i === 0 || i === 4 || i === 8 || i === 12 || i === 16 || i === 20) ? 3.5 : 2.2;
+            overlayCtx.fillStyle = "#ffffff";
+            overlayCtx.beginPath();
+            overlayCtx.arc(x, y, r, 0, Math.PI * 2);
+            overlayCtx.fill();
+          }
+        }
+      }
+    }
+
+    /* ==========================================================================
+       9. MEDIAPIPE VISION TASKS INITIALIZATION & DETECTION LOOP
+       ========================================================================== */
+    async function initMediaPipeModels() {
+      loadingMsg.textContent = "Loading WebAssembly Vision Engine...";
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+      );
+
+      // Helper with GPU delegate and automatic CPU fallback
+      async function createModel(loader, modelUrl, extraOpts = {}) {
+        try {
+          return await loader(vision, {
+            baseOptions: { modelAssetPath: modelUrl, delegate: "GPU" },
+            runningMode: "VIDEO",
+            ...extraOpts
+          });
+        } catch (gpuErr) {
+          console.warn("GPU delegate unavailable, falling back to CPU:", gpuErr);
+          return await loader(vision, {
+            baseOptions: { modelAssetPath: modelUrl, delegate: "CPU" },
+            runningMode: "VIDEO",
+            ...extraOpts
+          });
+        }
+      }
+
+      loadingMsg.textContent = "Loading HandLandmarker (Dual Hand, Float16)...";
+      handLandmarker = await createModel(
+        HandLandmarker.createFromOptions,
+        "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task",
+        { numHands: 2 }
+      );
+
+      loadingMsg.textContent = "Loading FaceLandmarker...";
+      faceLandmarker = await createModel(
+        FaceLandmarker.createFromOptions,
+        "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task",
+        { numFaces: 1 }
+      );
+
+      loadingMsg.textContent = "Loading PoseLandmarker (Lite)...";
+      poseLandmarker = await createModel(
+        PoseLandmarker.createFromOptions,
+        "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task",
+        { numPoses: 1 }
+      );
+    }
+
+    async function startCamera() {
+      startBtn.style.display = "none";
+      loadingBox.style.display = "flex";
+      errorMsg.style.display = "none";
+
+      try {
+        await initMediaPipeModels();
+
+        loadingMsg.textContent = "Requesting Webcam Stream...";
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            facingMode: "user"
+          },
+          audio: false
+        });
+
+        video.srcObject = stream;
+        await video.play();
+
+        overlayCanvas.width = video.videoWidth || 640;
+        overlayCanvas.height = video.videoHeight || 480;
+
+        // Hide start modal
+        startModal.style.opacity = "0";
+        startModal.style.pointerEvents = "none";
+        setTimeout(() => { startModal.style.display = "none"; }, 400);
+
+        // Begin detection & rendering loops
+        requestAnimationFrame(predictWebcam);
+      } catch (err) {
+        console.error("Camera/MediaPipe Init Error:", err);
+        loadingBox.style.display = "none";
+        startBtn.style.display = "inline-flex";
+        errorMsg.style.display = "block";
+        errorMsg.innerHTML = `<strong>Error:</strong> ${err.message || err}<br><small>Make sure camera permission is allowed and this page is served over localhost or HTTPS.</small>`;
+      }
+    }
+
+    startBtn.addEventListener("click", startCamera);
+
+    /**
+     * Optimized Detection loop inside requestAnimationFrame.
+     * Guarantees non-blocking 60fps tracking:
+     * 1. Concurrency lock prevents overlapping inferences.
+     * 2. HandLandmarker executes on every single new video frame.
+     * 3. FaceLandmarker & PoseLandmarker run at staggered intervals (every 4th-8th frame)
+     *    and automatically disable if FPS degrades.
+     */
+    function predictWebcam() {
+      if (isDetecting) {
+        requestAnimationFrame(predictWebcam);
+        return;
+      }
+
+      if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
+        lastVideoTime = video.currentTime;
+        const startTimeMs = performance.now();
+        isDetecting = true;
+        frameCount++;
+
+        try {
+          // HandLandmarker runs EVERY frame for instantaneous reaction
+          let handResult = null;
+          if (handLandmarker) {
+            handResult = handLandmarker.detectForVideo(video, startTimeMs);
+          }
+
+          // Stagger secondary landmarkers so they never contend for GPU/WASM bandwidth
+          if (enableSecondaryTracking) {
+            if (faceLandmarker && frameCount % 8 === 0) {
+              cachedFaceResult = faceLandmarker.detectForVideo(video, startTimeMs);
+            }
+            if (poseLandmarker && frameCount % 8 === 4) {
+              cachedPoseResult = poseLandmarker.detectForVideo(video, startTimeMs);
+            }
+          } else {
+            cachedFaceResult = null;
+            cachedPoseResult = null;
+          }
+
+          // Draw overlays on mirrored webcam HUD (renders all detected hands)
+          drawWebcamOverlays(handResult, cachedFaceResult, cachedPoseResult);
+
+          // Process Dual Hand Gestures, Handedness swap, and Telemetry
+          processAllHands(handResult);
+        } catch (cycleErr) {
+          console.warn("Detection cycle exception:", cycleErr);
+        } finally {
+          isDetecting = false;
+        }
+      }
+
+      requestAnimationFrame(predictWebcam);
+    }
+
+    /* ==========================================================================
+       10. THREE.JS PARTICLE MORPHING & FORCE FIELD ANIMATION LOOP
+       Frame-rate independent physics (delta time) & real-time responsiveness.
+       ========================================================================== */
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // FPS Calculation & Adaptive Performance Monitor
+      const nowMs = performance.now();
+      frameTimes.push(nowMs);
+      while (frameTimes.length > 0 && frameTimes[0] < nowMs - 1000) {
+        frameTimes.shift();
+      }
+      const currentFps = frameTimes.length;
+      if (nowMs - lastFpsUpdateTime > 300) {
+        lastFpsUpdateTime = nowMs;
+        if (fpsValEl) {
+          fpsValEl.textContent = currentFps;
+        }
+        if (enableSecondaryTracking && frameCount > 90 && currentFps < 22) {
+          console.warn(`[Performance] FPS dropped to ${currentFps}. Disabling Face/Pose to maintain 60 FPS hand tracking.`);
+          enableSecondaryTracking = false;
+        }
+      }
+
+      const delta = Math.min(clock.getDelta(), 0.1);
+      const elapsedTime = clock.getElapsedTime();
+
+      // Delta-time normalized lerp factors (normalized to 60fps)
+      const dtNorm = Math.min(delta * 60.0, 3.0);
+      const dynamicLerp = 1.0 - Math.pow(1.0 - 0.18, dtNorm); // ~0.18 per frame for scale/spread/force-field
+      const morphLerp = 1.0 - Math.pow(1.0 - 0.10, dtNorm);    // ~0.10 per frame for shape morphing
+
+      // 1. Particle Cloud Scaling based on Openness & Distance
+      // - Openness Factor:
+      //   Closed hand / fist (openness ~0-30%): pulls tightly together into small, sharp shape (~0.42)
+      //   Opening the hand (30% -> 100%): smoothly blooms outward into sparkling cloud (~1.48)
+      const openNorm = THREE.MathUtils.clamp(effectiveOpenness / 100.0, 0.0, 1.0);
+      const opennessFactor = 0.42 + Math.pow(openNorm, 1.25) * 1.06;
+
+      // - Distance Factor: Hand CLOSER (large palm) = BIGGER; farther away = smaller
+      const distRatio = effectiveDistance / 0.20;
+      const distanceFactor = THREE.MathUtils.clamp(0.60 + (distRatio - 1.0) * 0.95, 0.55, 1.85);
+
+      const targetScale = THREE.MathUtils.clamp(opennessFactor * distanceFactor, 0.35, 2.2);
+      currentParticleScale = THREE.MathUtils.lerp(currentParticleScale, targetScale, dynamicLerp);
+
+      // Two-Hand Stretch Bonus: distance between hands stretches shape horizontally
+      let targetStretchX = 1.0;
+      if (handsData.left.detected && handsData.right.detected) {
+        const handSpan = Math.abs(handsData.right.palmPos.x - handsData.left.palmPos.x);
+        targetStretchX = THREE.MathUtils.clamp(0.80 + handSpan * 0.65, 0.85, 1.6);
+      }
+      currentStretchX = THREE.MathUtils.lerp(currentStretchX, targetStretchX, dynamicLerp);
+
+      // Dynamic Particle Point Size:
+      // Small & dense when fist (~0.90); bigger, brighter, twinkling when open (~1.75)
+      const targetPointSize = THREE.MathUtils.lerp(0.90, 1.75, openNorm);
+      particleMaterial.size = THREE.MathUtils.lerp(particleMaterial.size, targetPointSize, dynamicLerp);
+
+      // 2. Palm Tilt (Center of detected hands)
+      let targetCentroidX = 0;
+      let targetCentroidY = 0;
+      if (handsData.left.detected && handsData.right.detected) {
+        targetCentroidX = (handsData.left.palmPos.x + handsData.right.palmPos.x) * 0.5;
+        targetCentroidY = (handsData.left.palmPos.y + handsData.right.palmPos.y) * 0.5;
+      } else if (handsData.left.detected) {
+        targetCentroidX = handsData.left.palmPos.x;
+        targetCentroidY = handsData.left.palmPos.y;
+      } else if (handsData.right.detected) {
+        targetCentroidX = handsData.right.palmPos.x;
+        targetCentroidY = handsData.right.palmPos.y;
+      }
+      const targetRotX = (targetCentroidY * 0.42) + Math.sin(elapsedTime * 0.35) * 0.10;
+      const targetRotY = (targetCentroidX * 0.52) + (elapsedTime * 0.16);
+      particleSystem.rotation.x = THREE.MathUtils.lerp(particleSystem.rotation.x, targetRotX, dynamicLerp);
+      particleSystem.rotation.y = THREE.MathUtils.lerp(particleSystem.rotation.y, targetRotY, dynamicLerp);
+
+      // 3. Smooth Particle Morphing & Physics Step
+      const targetPositions = shapes[currentShapeIndex];
+      const positions = geometry.attributes.position.array;
+      const colors = geometry.attributes.color.array;
+
+      const wingFlap = Math.sin(elapsedTime * 5.0);
+      const isButterfly = currentShapeIndex === 1;
+
+      // Pre-compute dual hand aura properties
+      const leftActive = handsData.left.detected;
+      const rightActive = handsData.right.detected;
+      const leftHx = handsData.left.palmPos.x * 16.0;
+      const leftHy = handsData.left.palmPos.y * 14.0;
+      const leftAuraRadius = 6.0 + (handsData.left.smoothedOpenness / 100.0) * 8.0;
+      const leftAuraForce = 1.4 + (handsData.left.smoothedOpenness / 100.0) * 1.6;
+
+      const rightHx = handsData.right.palmPos.x * 16.0;
+      const rightHy = handsData.right.palmPos.y * 14.0;
+      const rightAuraRadius = 6.0 + (handsData.right.smoothedOpenness / 100.0) * 8.0;
+      const rightAuraForce = 1.4 + (handsData.right.smoothedOpenness / 100.0) * 1.6;
+
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const idx = i * 3;
+
+        // Base shape position scaled by responsive distance & openness
+        let tx = targetPositions[idx + 0] * (currentParticleScale * currentStretchX);
+        let ty = targetPositions[idx + 1] * currentParticleScale;
+        let tz = targetPositions[idx + 2] * currentParticleScale;
+
+        if (isButterfly) {
+          tz += Math.pow(Math.abs(tx), 1.1) * 0.32 * wingFlap;
+        }
+
+        // Continuous Blooming & Free-Floating Sparkles:
+        // Fist (openNorm <= 0.28): 0 particles bloom, shape is small, tight and crisp.
+        // Opening (0.30 -> 1.0): More and more particles break loose into organic floating sparkles!
+        const threshold = particleBreakThresholds[i];
+        let bloomRatio = 0.0;
+        if (openNorm > threshold) {
+          bloomRatio = (openNorm - threshold) / (1.0 - threshold);
+          const bloomDist = Math.pow(bloomRatio, 1.3) * 14.0;
+          const ox = particleDriftOffsets[idx + 0];
+          const oy = particleDriftOffsets[idx + 1];
+          const oz = particleDriftOffsets[idx + 2];
+          const driftHarmonic = Math.sin(elapsedTime * (2.0 + bloomRatio * 3.0) + particlePhases[i]);
+
+          tx += ox * bloomDist + Math.cos(elapsedTime * 1.5 + particlePhases[i]) * (bloomDist * 0.4);
+          ty += oy * bloomDist + Math.sin(elapsedTime * 1.8 + particlePhases[i]) * (bloomDist * 0.4);
+          tz += oz * bloomDist + driftHarmonic * (bloomDist * 0.3);
+        }
+
+        // Apply explosion velocity impulse
+        positions[idx + 0] += particleVelocities[idx + 0] * delta;
+        positions[idx + 1] += particleVelocities[idx + 1] * delta;
+        positions[idx + 2] += particleVelocities[idx + 2] * delta;
+
+        particleVelocities[idx + 0] *= 0.90;
+        particleVelocities[idx + 1] *= 0.90;
+        particleVelocities[idx + 2] *= 0.90;
+
+        // 4. Dual Palm Auras & Force Fields
+        let auraGlow = 0.0;
+        if (leftActive) {
+          const dx = positions[idx + 0] - leftHx;
+          const dy = positions[idx + 1] - leftHy;
+          const distSq = dx * dx + dy * dy;
+          if (distSq < leftAuraRadius * leftAuraRadius && distSq > 0.01) {
+            const dist = Math.sqrt(distSq);
+            const push = (1.0 - dist / leftAuraRadius) * leftAuraForce * dynamicLerp;
+            positions[idx + 0] += (dx / dist) * push;
+            positions[idx + 1] += (dy / dist) * push;
+            auraGlow = Math.max(auraGlow, 1.0 - dist / leftAuraRadius);
+          }
+        }
+        if (rightActive) {
+          const dx = positions[idx + 0] - rightHx;
+          const dy = positions[idx + 1] - rightHy;
+          const distSq = dx * dx + dy * dy;
+          if (distSq < rightAuraRadius * rightAuraRadius && distSq > 0.01) {
+            const dist = Math.sqrt(distSq);
+            const push = (1.0 - dist / rightAuraRadius) * rightAuraForce * dynamicLerp;
+            positions[idx + 0] += (dx / dist) * push;
+            positions[idx + 1] += (dy / dist) * push;
+            auraGlow = Math.max(auraGlow, 1.0 - dist / rightAuraRadius);
+          }
+        }
+
+        // 5. Morph towards target
+        positions[idx + 0] += (tx - positions[idx + 0]) * morphLerp;
+        positions[idx + 1] += (ty - positions[idx + 1]) * morphLerp;
+        positions[idx + 2] += (tz - positions[idx + 2]) * morphLerp;
+
+        // 6. Dynamic Colors, Twinkling & Brightness Boost
+        const baseR = particleBaseColors[idx + 0];
+        const baseG = particleBaseColors[idx + 1];
+        const baseB = particleBaseColors[idx + 2];
+
+        const twinkleFreq = bloomRatio > 0 ? (3.5 + bloomRatio * 4.0) : 1.8;
+        const twinkle = Math.sin(elapsedTime * twinkleFreq + particlePhases[i]);
+        const brightness = (0.90 + openNorm * 0.40) + (bloomRatio > 0 ? (0.35 + bloomRatio * 0.35) * twinkle : 0.08 * twinkle) + auraGlow * 0.75;
+
+        colors[idx + 0] = Math.max(0.05, Math.min(1.0, baseR * brightness));
+        colors[idx + 1] = Math.max(0.05, Math.min(1.0, baseG * brightness));
+        colors[idx + 2] = Math.max(0.05, Math.min(1.0, baseB * brightness));
+      }
+
+      geometry.attributes.position.needsUpdate = true;
+      geometry.attributes.color.needsUpdate = true;
+
+      renderer.render(scene, camera);
+    }
+
+    animate();
+
+    /* ==========================================================================
+       11. RESPONSIVE RESIZE HANDLING
+       ========================================================================== */
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    });
+  </script>
+</body>
+</html>
