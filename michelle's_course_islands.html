@@ -1,0 +1,1830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pforzheim AI Course Islands</title>
+<meta name="description" content="An interactive 3D map of the Pforzheim AI Course: six cute floating islands, one per unit, each with lessons and a small activity.">
+<!--
+  =====================================================================
+  PFORZHEIM AI COURSE ISLANDS: single-file interactive course map
+  =====================================================================
+  Open this file directly in a modern browser (Chrome, Edge, Firefox,
+  Safari). An internet connection is needed for the 3D library (Three.js
+  from jsDelivr) and the font (Google Fonts). Without it, a text-only
+  version of the islands is shown automatically.
+
+  WHERE TO CUSTOMIZE (search for these markers):
+    [DATA]    → island names, unit titles, intros, lessons, activities
+    [COLORS]  → UI colors (CSS variables) + island colors live in [DATA]
+    [SKY]     → 3D sky / sea / fog colors
+    [MUSIC]   → chords, melody notes, tempo, loudness
+  =====================================================================
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+/* ------------------------------------------------------------------
+   [COLORS] Design tokens. Change these to restyle the whole UI.
+   ------------------------------------------------------------------ */
+:root{
+  --ink:#2C3152;          /* main text */
+  --ink-soft:#585E84;     /* secondary text (still ≥ 4.5:1 on white) */
+  --paper:#FFFFFF;
+  --paper-2:#F6F4FC;
+  --line:#E2DEF0;
+  --accent:#7B6CD9;
+  --accent-ink:#4B3FA8;   /* accent dark enough for white text */
+  --accent-soft:#ECE8FF;
+  --good:#22704F;  --good-soft:#E2F5EA;
+  --warn:#86500F;  --warn-soft:#FFF1DC;
+  --shadow:0 10px 30px rgba(60,50,120,.16), 0 2px 6px rgba(60,50,120,.08);
+  --font:"Nunito", ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --fs:16px; --lh:1.55; --ls:0;
+  --t:.35s;                       /* standard UI transition */
+  --panel-w:min(440px, 40vw);
+  --panel-top:96px;               /* updated by JS to sit below the top bar */
+}
+/* Low-stimulation mode: calmer colors, more spacing, no transitions */
+body.low-stim{
+  --fs:17.5px; --lh:1.75; --ls:.012em;
+  --accent:#7D78A6; --accent-ink:#4A4675; --accent-soft:#EEEDF5;
+  --shadow:0 2px 8px rgba(60,50,120,.12);
+  --t:0s;
+}
+body.low-stim *, body.low-stim *::before, body.low-stim *::after{
+  transition:none !important; animation:none !important;
+}
+@media (prefers-reduced-motion: reduce){
+  *, *::before, *::after{ transition-duration:.01ms !important; animation-duration:.01ms !important; }
+}
+
+*{ box-sizing:border-box; }
+html, body{ margin:0; height:100%; overflow:hidden; }
+body{
+  font-family:var(--font); font-size:var(--fs); line-height:var(--lh); letter-spacing:var(--ls);
+  color:var(--ink);
+  background:linear-gradient(#8FA3E6, #CFC6F2 55%, #FADCE6);  /* shown before 3D loads */
+}
+body.low-stim{ background:#E9E6F2; }
+body.no3d{ overflow:auto; }
+
+button, input, textarea{ font:inherit; letter-spacing:inherit; color:inherit; }
+button{ cursor:pointer; }
+:focus-visible{ outline:3px solid var(--accent-ink); outline-offset:3px; }
+.sr-only{ position:absolute !important; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+
+/* ---------------- Top bar ---------------- */
+.topbar{
+  position:fixed; top:12px; left:12px; right:12px; z-index:40;
+  display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px 16px;
+  padding:10px 14px 10px 18px;
+  background:rgba(255,255,255,.86); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  border-radius:22px; box-shadow:var(--shadow);
+}
+.brand h1{ margin:0; font-size:clamp(1.1rem, 2.3vw, 1.5rem); font-weight:800; line-height:1.2; }
+.brand .by{ font-size:.62em; font-weight:600; color:var(--ink-soft); margin-left:.45em; white-space:nowrap; }
+.controls{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.btn-pill{
+  display:inline-flex; align-items:center; gap:8px; min-height:40px; padding:6px 14px;
+  border-radius:999px; border:2px solid var(--line); background:var(--paper);
+  font-weight:700; font-size:.92rem; transition:border-color var(--t), background var(--t);
+}
+.btn-pill:hover{ border-color:var(--accent); }
+.btn-pill[aria-pressed="true"]{ background:var(--accent-soft); border-color:var(--accent); }
+.btn-pill:disabled{ opacity:.55; cursor:not-allowed; }
+.switch .track{ position:relative; flex:none; width:38px; height:22px; border-radius:999px; background:#D6D2E6; transition:background var(--t); }
+.switch .track::after{
+  content:""; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%;
+  background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25); transition:transform var(--t);
+}
+.switch[aria-checked="true"]{ background:var(--accent-soft); border-color:var(--accent); }
+.switch[aria-checked="true"] .track{ background:var(--accent-ink); }
+.switch[aria-checked="true"] .track::after{ transform:translateX(16px); }
+.music-group{ display:inline-flex; align-items:center; gap:4px; padding:2px 4px 2px 2px; border-radius:999px; background:var(--paper-2); }
+.vol{ display:inline-flex; align-items:center; gap:6px; padding:0 8px 0 4px; font-size:.85rem; color:var(--ink-soft); font-weight:700; }
+.vol input{ width:86px; accent-color:var(--accent-ink); }
+.vol input:disabled{ opacity:.5; }
+
+/* ---------------- 3D stage ---------------- */
+#scene{ position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; outline:none; }
+body.low-stim #scene{ filter:saturate(.6); }
+body.no3d #scene{ display:none; }
+
+#labels{ position:fixed; inset:0; pointer-events:none; z-index:10; overflow:hidden; }
+.island-label{
+  position:absolute; left:0; top:0; pointer-events:auto;
+  display:flex; align-items:center; gap:7px; padding:4px 13px 4px 4px;
+  border-radius:999px; border:2px solid rgba(255,255,255,.95); background:rgba(255,255,255,.9);
+  font-weight:800; font-size:.92rem; white-space:nowrap;
+  box-shadow:0 4px 14px rgba(60,50,120,.18);
+  transition:box-shadow var(--t), background var(--t), opacity var(--t);
+  will-change:transform;
+}
+.island-label .letter{
+  display:grid; place-items:center; width:28px; height:28px; border-radius:50%;
+  background:var(--c); color:var(--ink); font-weight:800;
+}
+.island-label.hot, .island-label:hover{
+  background:#fff;
+  box-shadow:0 0 0 5px color-mix(in srgb, var(--c) 65%, transparent), 0 6px 18px rgba(60,50,120,.22);
+}
+.island-label.selected{ background:#fff; border-color:var(--c); }
+.island-label.offscreen{ opacity:0; pointer-events:none; }
+body.low-stim .island-label.hot, body.low-stim .island-label:hover{ box-shadow:0 0 0 3px var(--accent-ink); }
+
+/* ---------------- Floating UI ---------------- */
+#backBtn{ position:fixed; z-index:35; top:var(--panel-top); left:12px; box-shadow:var(--shadow); }
+#loading{
+  position:fixed; inset:0; display:grid; place-items:center; z-index:5; pointer-events:none;
+  font-weight:700; color:var(--ink);
+}
+#loading span{ background:rgba(255,255,255,.85); padding:12px 20px; border-radius:999px; box-shadow:var(--shadow); }
+
+#hint{
+  position:fixed; z-index:25; left:50%; bottom:24px; transform:translateX(-50%);
+  display:flex; align-items:center; gap:12px; max-width:calc(100% - 32px);
+  padding:10px 10px 10px 18px; border-radius:999px;
+  background:rgba(255,255,255,.94); box-shadow:var(--shadow); font-weight:700;
+  transition:opacity .6s ease;
+}
+#hint.fade{ opacity:0; }
+#hint .btn{ min-height:36px; padding:4px 14px; }
+
+/* ---------------- Side panel (bottom sheet on phones) ---------------- */
+.panel{
+  position:fixed; z-index:30; top:var(--panel-top); right:12px; bottom:12px; width:var(--panel-w);
+  display:flex; flex-direction:column; background:var(--paper);
+  border-radius:24px; box-shadow:var(--shadow);
+  transform:translateX(calc(100% + 30px)); visibility:hidden;
+  transition:transform .5s cubic-bezier(.22,.8,.24,1), visibility 0s linear .5s;
+}
+.panel.open{ transform:none; visibility:visible; transition:transform .5s cubic-bezier(.22,.8,.24,1); }
+#panelBody{ display:flex; flex-direction:column; height:100%; min-height:0; }
+.panel-head{
+  position:relative; padding:18px 60px 14px 22px; border-radius:24px 24px 0 0;
+  background:linear-gradient(135deg, color-mix(in srgb, var(--c) 55%, white), #fff 85%);
+  border-bottom:1px solid var(--line);
+}
+.kicker{ display:flex; align-items:center; gap:8px; font-weight:800; font-size:.8rem; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); }
+.kicker .dot{ width:12px; height:12px; border-radius:50%; background:var(--c); box-shadow:0 0 0 2px #fff; }
+.panel h2{ margin:4px 0 0; font-size:1.35rem; line-height:1.25; font-weight:800; }
+.panel h2:focus{ outline:none; }
+.panel h2:focus-visible{ outline:3px solid var(--accent-ink); outline-offset:4px; border-radius:6px; }
+.icon-btn{
+  position:absolute; top:14px; right:14px; width:42px; height:42px; border-radius:50%;
+  border:2px solid var(--line); background:#fff; font-size:1.35rem; line-height:1; font-weight:700;
+}
+.icon-btn:hover{ border-color:var(--accent); }
+.panel-scroll{ flex:1; min-height:0; overflow-y:auto; padding:16px 22px 22px; overscroll-behavior:contain; }
+.panel h3{ margin:18px 0 10px; font-size:1.05rem; font-weight:800; }
+.intro{ margin:0; font-size:1.02em; }
+.lessons{ list-style:none; margin:0; padding:0; display:grid; gap:8px; }
+.lessons li{ display:flex; gap:10px; padding:10px 12px; background:var(--paper-2); border-radius:14px; }
+.lessons .num{ flex:none; min-width:2.3em; font-weight:800; color:var(--accent-ink); }
+.lessons strong{ display:block; font-weight:700; }
+.lessons .desc{ display:block; color:var(--ink-soft); font-size:.94em; }
+
+.activity{
+  margin-top:20px; padding:4px 16px 16px; border-radius:18px;
+  background:color-mix(in srgb, var(--c) 16%, white);
+  border:2px dashed color-mix(in srgb, var(--c) 75%, #fff);
+}
+.activity h3{ margin-top:14px; }
+.instr{ margin:0 0 12px; color:var(--ink-soft); }
+.panel-nav{ display:flex; justify-content:space-between; gap:8px; margin-top:18px; }
+
+/* Activity building blocks */
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:42px; padding:6px 16px;
+  border-radius:999px; border:0; background:var(--accent-ink); color:#fff; font-weight:800;
+}
+.btn:disabled{ opacity:.45; cursor:not-allowed; }
+.btn-soft{
+  display:inline-flex; align-items:center; justify-content:center; min-height:42px; padding:6px 16px;
+  border-radius:999px; border:2px solid var(--line); background:#fff; font-weight:700;
+}
+.btn-soft:disabled{ opacity:.45; cursor:not-allowed; }
+.row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.chip{
+  display:flex; align-items:center; gap:8px; width:100%; min-height:44px; padding:8px 12px; text-align:left;
+  border-radius:12px; border:2px solid var(--line); background:#fff; font-weight:600; font-size:.95em;
+  transition:border-color var(--t), background var(--t);
+}
+.chip:hover{ border-color:var(--accent); }
+.chip[aria-pressed="true"]{ border-color:var(--accent-ink); background:var(--accent-soft); }
+.chip.matched, .chip[data-correct]{ border-color:#7CC8A0; background:var(--good-soft); cursor:default; opacity:1; }
+.chip:disabled:not([data-correct]){ opacity:.55; cursor:default; }
+.badge{
+  flex:none; display:inline-grid; place-items:center; width:26px; height:26px; border-radius:50%;
+  background:var(--accent-ink); color:#fff; font-size:.8rem; font-weight:800;
+}
+.chip.matched .badge{ background:var(--good); }
+.feedback{ margin:12px 0 0; min-height:1.4em; border-radius:12px; }
+.feedback.good{ background:var(--good-soft); color:var(--good); padding:9px 12px; font-weight:700; }
+.feedback.warn{ background:var(--warn-soft); color:var(--warn); padding:9px 12px; font-weight:700; }
+.progress{ margin:0 0 8px; font-size:.9em; color:var(--ink-soft); font-weight:700; }
+.muted{ color:var(--ink-soft); }
+
+.match{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.match-col{ display:flex; flex-direction:column; gap:8px; }
+.match h4, .sort h4{ margin:0; font-size:.85em; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); }
+
+.scenario-q{ margin:0 0 10px; padding:12px 14px; background:#fff; border-radius:14px; font-weight:700; }
+.options{ display:grid; gap:8px; }
+
+.steps{ display:grid; gap:8px; }
+.step .tag{ margin-left:auto; flex:none; font-size:.78em; font-weight:800; padding:2px 10px; border-radius:999px; background:var(--accent-soft); color:var(--accent-ink); }
+.step.picked{ background:var(--accent-soft); border-color:var(--accent); }
+
+.helper fieldset{ border:0; margin:0 0 12px; padding:0; }
+.helper legend{ font-weight:800; margin-bottom:6px; padding:0; }
+.opt{ display:flex; align-items:flex-start; gap:10px; padding:8px 10px; margin-bottom:6px; background:#fff; border-radius:12px; border:2px solid transparent; cursor:pointer; }
+.opt:has(input:checked){ border-color:var(--accent); background:var(--accent-soft); }
+.opt input{ margin-top:.3em; accent-color:var(--accent-ink); width:18px; height:18px; flex:none; }
+.summary-list{ margin:6px 0 0; padding-left:1.2em; font-weight:600; }
+
+.cards{ list-style:none; margin:0; padding:0; display:grid; gap:10px; }
+.card{ background:#fff; border-radius:14px; padding:10px 12px; border:2px solid var(--line); }
+.card p{ margin:0; font-weight:700; }
+.card.done{ border-color:#7CC8A0; background:var(--good-soft); }
+.card .card-result{ margin-top:6px; font-weight:600; color:var(--good); }
+.card .row .chip{ width:auto; flex:1; justify-content:center; }
+.hintline{ margin:6px 0 0 !important; font-weight:600 !important; color:var(--warn); }
+
+.reflect{ margin-top:16px; }
+.reflect label{ display:block; margin-bottom:6px; }
+textarea{
+  width:100%; min-height:80px; padding:10px 12px; border-radius:12px; border:2px solid var(--line);
+  background:#fff; resize:vertical;
+}
+textarea:focus-visible{ outline:3px solid var(--accent-ink); outline-offset:1px; }
+
+.flip-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:10px; }
+.flip{ position:relative; height:138px; padding:0; border:0; background:none; perspective:900px; border-radius:16px; }
+.flip-inner{ position:absolute; inset:0; transform-style:preserve-3d; transition:transform .7s ease; }
+.flip[aria-pressed="true"] .flip-inner{ transform:rotateY(180deg); }
+.flip-face{
+  position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; gap:4px;
+  padding:10px; border-radius:16px; backface-visibility:hidden; -webkit-backface-visibility:hidden;
+  border:2px solid var(--line); background:#fff; text-align:center;
+}
+.flip-face strong{ font-size:1.02em; }
+.flip-face small{ color:var(--ink-soft); font-weight:600; font-size:.8em; }
+.flip-back{ transform:rotateY(180deg); background:var(--accent-soft); border-color:var(--accent); font-size:.82em; text-align:left; }
+.flip-back ul{ margin:2px 0 0; padding-left:1.1em; }
+.compare{ margin-top:14px; padding:12px; background:#fff; border-radius:14px; }
+.compare p{ margin:0 0 8px; }
+
+/* ---------------- Island list (dialog + no-3D fallback) ---------------- */
+.overlay{ position:fixed; inset:0; z-index:50; display:grid; place-items:center; padding:16px; background:rgba(44,49,82,.38); }
+.overlay[hidden]{ display:none; }
+.dialog-card{
+  position:relative; width:min(560px, 100%); max-height:calc(100dvh - 32px); overflow:auto;
+  padding:22px; background:#fff; border-radius:24px; box-shadow:var(--shadow);
+}
+.dialog-card h2{ margin:0 50px 6px 0; font-size:1.3rem; }
+.island-list{ list-style:none; margin:14px 0 0; padding:0; display:grid; gap:8px; }
+.island-list button{
+  display:flex; align-items:center; gap:12px; width:100%; padding:10px 12px; text-align:left;
+  border-radius:16px; border:2px solid var(--line); background:#fff;
+}
+.island-list button:hover{ border-color:var(--accent); }
+.island-list .letter{ flex:none; display:grid; place-items:center; width:36px; height:36px; border-radius:50%; background:var(--c); font-weight:800; }
+.island-list strong{ display:block; }
+.island-list .sub{ display:block; color:var(--ink-soft); font-size:.94em; }
+#fallback{ position:relative; z-index:5; padding:calc(var(--panel-top) + 4px) 16px 32px; }
+#fallback .dialog-card{ margin:0 auto; max-height:none; }
+.fallback-msg{ margin:0; padding:10px 14px; border-radius:14px; background:var(--warn-soft); color:var(--warn); font-weight:700; }
+
+/* ---------------- Responsive ---------------- */
+@media (max-width: 1024px){ :root{ --panel-w:min(400px, 46vw); } }
+@media (max-width: 720px){
+  .topbar{ top:8px; left:8px; right:8px; padding:8px 10px 8px 14px; border-radius:18px; gap:6px; }
+  .controls{ gap:6px; }
+  .btn-pill{ min-height:38px; padding:4px 11px; font-size:.84rem; }
+  .vol input{ width:70px; }
+  .panel{
+    top:auto; left:8px; right:8px; bottom:0; width:auto; height:min(58dvh, 560px);
+    border-radius:24px 24px 0 0; transform:translateY(calc(100% + 20px));
+  }
+  .panel-scroll{ padding:14px 16px 24px; }
+  .panel-head{ padding:16px 60px 12px 16px; }
+  #backBtn{ left:8px; top:var(--panel-top); }
+  #hint{ bottom:16px; border-radius:20px; font-size:.92rem; }
+  .island-label{ font-size:.82rem; padding:3px 10px 3px 3px; }
+  .island-label .letter{ width:24px; height:24px; }
+}
+@media (max-width: 380px){ .island-label .lname{ display:none; } .island-label{ padding:3px; } }
+</style>
+
+<!-- Three.js via import map (exact version, loaded from jsDelivr) -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+
+<body>
+<!-- ===================== Top bar ===================== -->
+<header class="topbar" id="topbar">
+  <div class="brand">
+    <h1>Pforzheim AI Course Islands <span class="by">by Prof Luarn</span></h1>
+  </div>
+  <div class="controls" role="group" aria-label="Page settings">
+    <button class="btn-pill" id="skipBtn" type="button" aria-haspopup="dialog"
+            aria-label="Skip 3D view: open a text list of all islands">
+      <span aria-hidden="true">☰</span> Skip 3D view
+    </button>
+    <button class="btn-pill switch" id="lowStimBtn" type="button" role="switch" aria-checked="false">
+      <span class="track" aria-hidden="true"></span> Low-stimulation mode
+    </button>
+    <div class="music-group">
+      <button class="btn-pill" id="musicBtn" type="button" aria-pressed="false" aria-label="Background music: off. Press to turn on.">
+        <span aria-hidden="true">♪</span> <span id="musicText">Music: Off</span>
+      </button>
+      <label class="vol" for="volume">
+        <span aria-hidden="true">Vol</span>
+        <span class="sr-only">Music volume</span>
+        <input type="range" id="volume" min="0" max="100" value="50">
+      </label>
+    </div>
+  </div>
+</header>
+
+<!-- ===================== 3D stage ===================== -->
+<main id="stage" aria-label="3D map of the course islands">
+  <canvas id="scene" aria-hidden="true"></canvas>
+  <div id="labels" role="group" aria-label="Islands. Use Tab to move between islands and Enter to open one." hidden></div>
+  <div id="loading" role="status"><span>Floating the islands into place…</span></div>
+  <section id="fallback" hidden aria-labelledby="fallbackTitle">
+    <div class="dialog-card">
+      <h2 id="fallbackTitle">Course islands (text version)</h2>
+      <p class="fallback-msg" id="fallbackMsg"></p>
+      <div id="fallbackList"></div>
+    </div>
+  </section>
+</main>
+
+<button class="btn-pill" id="backBtn" type="button" hidden aria-label="Back to overview of all islands">
+  <span aria-hidden="true">←</span> Back to overview
+</button>
+
+<!-- ===================== Island panel ===================== -->
+<aside class="panel" id="panel" role="dialog" aria-modal="false" aria-labelledby="panelTitle" aria-hidden="true" inert>
+  <div id="panelBody"></div>
+</aside>
+
+<!-- ===================== Text-only island list ===================== -->
+<div class="overlay" id="listDialog" hidden>
+  <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="listTitle">
+    <h2 id="listTitle">All islands</h2>
+    <p class="muted" style="margin:0">Choose an island to open its lessons and activity.</p>
+    <button class="icon-btn" id="listClose" type="button" aria-label="Close island list">×</button>
+    <div id="listBody"></div>
+  </div>
+</div>
+
+<!-- First-load hint -->
+<div id="hint" role="status" hidden>
+  <span id="hintText">Drag to rotate, scroll to zoom, click an island to explore.</span>
+  <button class="btn" id="hintOk" type="button">Got it</button>
+</div>
+
+<!-- Screen-reader announcements -->
+<div class="sr-only" aria-live="polite" id="srStatus"></div>
+
+
+<!-- =====================================================================
+     PART 1: Course data, UI, activities, music (plain script).
+     Works even when the 3D view can't load.
+     ===================================================================== -->
+<script>
+(function () {
+'use strict';
+
+/* ------------------------------------------------------------------
+   [DATA] Course content. Edit names, colors, texts and activities here.
+   color   = island top color (also used for labels/panel)
+   accent  = small details on the landmark
+   landmark = one of: cameraTower, faceHill, easel, gem, robotHut, rocket
+   ------------------------------------------------------------------ */
+const ISLANDS = [
+  {
+    letter: "A", unit: 1, title: "Getting Started with Perceptual AI",
+    color: "#A8E6CF", accent: "#FF9AA2", landmark: "cameraTower",
+    intro: "Welcome aboard! This is your starting island: you’ll set up your own little home on the web and take your first steps with AI that can “see”. No coding experience needed, just curiosity.",
+    lessons: [
+      { id: "1.1", title: "Build your own personal web page and course introduction", desc: "Create a simple personal page to share your work, and get to know how the course works." },
+      { id: "1.2", title: "Introduction to Google MediaPipe Tasks (perceptual AI)", desc: "Meet a toolkit with ready-made models that let computers find faces, hands and bodies." },
+      { id: "1.3", title: "Train your own recognition model with Teachable Machine", desc: "Teach a computer to recognize your own examples, with no coding required." },
+      { id: "1.4", title: "Image object recognition with Google Antigravity", desc: "Use an AI-assisted coding tool to build an app that spots objects in photos." },
+      { id: "1.5", title: "Video object recognition with Google Antigravity", desc: "Take the same idea to moving video and see recognition happen frame by frame." }
+    ],
+    activity: {
+      type: "match", title: "Match the tool to the task",
+      instructions: "Pick a task, then pick the tool that fits it best. Matched pairs get the same number.",
+      pairs: [
+        ["Share my projects and introduce myself online", "Personal web page"],
+        ["Detect faces, hands or bodies with ready-made models", "Google MediaPipe Tasks"],
+        ["Teach a computer to recognize my own photos without code", "Teachable Machine"],
+        ["Build an object-recognition app with an AI coding assistant", "Google Antigravity"]
+      ]
+    }
+  },
+  {
+    letter: "B", unit: 2, title: "MediaPipe Vision Tasks",
+    color: "#FFCFB3", accent: "#6CC7C2", landmark: "faceHill",
+    intro: "MediaPipe gives your projects a pair of ready-made “eyes”. On this island you’ll explore six vision tasks, and each one answers a different question about an image or a video.",
+    lessons: [
+      { id: "2.1", title: "MediaPipe Face Landmark Detection", desc: "Find many points on a face in a photo, such as the corners of the eyes and lips." },
+      { id: "2.2", title: "MediaPipe Video Face Landmark Detection", desc: "Track those face points live, frame by frame, in video or on a webcam." },
+      { id: "2.3", title: "MediaPipe Pose Landmark Detection", desc: "Locate key body points like shoulders, elbows and knees to understand posture." },
+      { id: "2.4", title: "MediaPipe Gesture Recognition", desc: "Recognize hand gestures such as a thumbs-up or an open palm." },
+      { id: "2.5", title: "MediaPipe Image Segmentation", desc: "Split a picture into regions, for example the person versus the background." },
+      { id: "2.6", title: "MediaPipe Face Detection", desc: "Quickly find where faces are in an image and mark them with boxes." }
+    ],
+    activity: {
+      type: "scenario", title: "Which task would you use?",
+      instructions: "Read each situation and pick the MediaPipe task that fits best.",
+      items: [
+        { q: "A fitness app checks whether your squat posture looks right.", options: ["Pose Landmark Detection", "Face Detection", "Image Segmentation"], answer: 0,
+          why: "Pose landmarks give you points for hips, knees and shoulders, which is exactly what you need to judge posture." },
+        { q: "In a video call, everything behind you gets blurred, but you stay sharp.", options: ["Gesture Recognition", "Image Segmentation", "Face Landmark Detection"], answer: 1,
+          why: "Segmentation separates you from the background, so only the background gets blurred." },
+        { q: "Your slides move forward when you show a thumbs-up to the camera.", options: ["Pose Landmark Detection", "Face Detection", "Gesture Recognition"], answer: 2,
+          why: "Gesture Recognition is made for hand gestures like a thumbs-up." },
+        { q: "A photo app counts how many people are in a group picture.", options: ["Face Detection", "Image Segmentation", "Gesture Recognition"], answer: 0,
+          why: "Face Detection draws a box around each face. Then you just count the boxes." },
+        { q: "A live filter places virtual glasses exactly on your eyes while you move.", options: ["Face Detection", "Video Face Landmark Detection", "Pose Landmark Detection"], answer: 1,
+          why: "You need detailed face points (eyes, nose) tracked frame by frame in video." },
+        { q: "A still portrait photo gets a precise outline of eyes, nose and lips for a make-up preview.", options: ["Face Landmark Detection", "Gesture Recognition", "Image Segmentation"], answer: 0,
+          why: "Face Landmark Detection maps many detailed points on a face in a single image." }
+      ]
+    }
+  },
+  {
+    letter: "C", unit: 3, title: "Real-Time Models and Creative AI",
+    color: "#CDB8F5", accent: "#FF9F80", landmark: "easel",
+    intro: "Here AI goes live and gets creative. You’ll run models in real time, turn photos into art, connect to a large language model for your own chat app, and build an island of your own.",
+    lessons: [
+      { id: "3.1", title: "Teachable Machine Real-Time Object Classifier", desc: "Run a model you trained yourself live on the webcam and watch the predictions update." },
+      { id: "3.2", title: "YOLO", desc: "A fast, popular model that finds and labels many objects in an image at once." },
+      { id: "3.3", title: "Neural Style Transfer", desc: "Repaint a photo in the style of an artwork using a neural network." },
+      { id: "3.4", title: "Simple Chat App Built with a Gemini API Key", desc: "Connect to Gemini with your own API key and build a small chat page." },
+      { id: "3.5", title: "Island Builder", desc: "Design your own interactive island-style web page with AI as your helper." }
+    ],
+    activity: {
+      type: "order", title: "Put the pipeline in order",
+      instructions: "Every AI app follows the same idea: input → model → output. Click the steps in the order they happen.",
+      rounds: [
+        { name: "Real-time object detection (YOLO)", steps: [
+          ["The webcam captures a video frame", "Input"],
+          ["The YOLO model looks for objects in the frame", "Model"],
+          ["Boxes and labels appear on the screen", "Output"] ] },
+        { name: "Your Gemini chat app", steps: [
+          ["You type a message", "Input"],
+          ["The app sends it to Gemini using your API key", "Model"],
+          ["Gemini writes a reply", "Model"],
+          ["The reply shows up in the chat window", "Output"] ] },
+        { name: "Neural style transfer", steps: [
+          ["You choose a photo and an artwork style", "Input"],
+          ["The neural network blends content and style", "Model"],
+          ["A new, stylized image is shown", "Output"] ] }
+      ]
+    }
+  },
+  {
+    letter: "D", unit: 4, title: "Gemini and Multimodal Workflows",
+    color: "#A9D6F5", accent: "#FFD66B", landmark: "gem",
+    intro: "“Multimodal” means AI that understands more than text: images, documents and more. On this island you’ll try models on your own computer and in the cloud, and learn to combine Gemini’s features into useful workflows.",
+    lessons: [
+      { id: "4.1", title: "Use a multimodal model to let Ollama recognize images", desc: "Run an open model on your own computer with Ollama and let it describe pictures." },
+      { id: "4.2", title: "Gemini", desc: "Get to know Google’s Gemini assistant and practise writing clear prompts." },
+      { id: "4.3", title: "Gemini Notebook", desc: "Gather your materials in one place and explore them together with Gemini." },
+      { id: "4.4", title: "Gemini Canvas", desc: "Draft and refine documents or small projects side by side with Gemini." },
+      { id: "4.5", title: "Gemini Skills-1", desc: "First steps with Gemini Skills. We’ll explore them in class." },
+      { id: "4.6", title: "Gemini Skills-2", desc: "Build on part 1 with more hands-on practice." },
+      { id: "4.7", title: "Gemini Skills-3", desc: "Combine what you’ve learned into a small workflow of your own." }
+    ],
+    activity: {
+      type: "helper", title: "Design your own helper",
+      instructions: "Pick a goal, tick the Gemini features you would combine, and see what your helper could do.",
+      goals: ["Prepare for an exam", "Plan a group project", "Create a portfolio piece", "Stay on top of weekly tasks"],
+      features: [
+        { name: "Notebook", role: "could collect your sources and notes in one place" },
+        { name: "Canvas", role: "could help you draft and refine the result" },
+        { name: "Skills", role: "could repeat a task the same way every time" },
+        { name: "Connectors", role: "could bring in information from other apps you use" },
+        { name: "Scheduled Tasks", role: "could do something for you at set times" }
+      ]
+    }
+  },
+  {
+    letter: "E", unit: 5, title: "AI Agents",
+    color: "#F7B8D2", accent: "#9B8BD9", landmark: "robotHut",
+    intro: "A chatbot answers, while an agent acts. On this island you’ll meet tools that can plan steps, use other apps and work through multi-step tasks. You’ll also think about when that is helpful and when a human should stay in charge.",
+    lessons: [
+      { id: "5.1", title: "n8n", desc: "Connect apps and AI steps into automated workflows using visual building blocks." },
+      { id: "5.2", title: "ChatGPT multi-agent", desc: "See how several AI helpers can split up and share a bigger task." },
+      { id: "5.3", title: "ChatGPT Skills", desc: "Explore how reusable instructions help with tasks you repeat often. We’ll explore this in class." },
+      { id: "5.4", title: "ChatGPT Plugins - canva", desc: "Use Canva from within ChatGPT to turn ideas into designs." },
+      { id: "5.5", title: "ChatGPT Sites", desc: "Explore making simple web pages with ChatGPT. We’ll explore this in class." },
+      { id: "5.6", title: "Claude Skills", desc: "Learn how Claude can use packaged instructions and resources for specialised tasks." },
+      { id: "5.7", title: "OpenClaw", desc: "An open-source agent project. We’ll explore it in class." },
+      { id: "5.8", title: "Hermes Agent", desc: "Another agent to explore in class and compare with the others." }
+    ],
+    activity: {
+      type: "sort", title: "Agent or chatbot?",
+      instructions: "For each card, decide: does it just answer (chatbot), or does it plan and take several actions (agent)?",
+      cards: [
+        { text: "Explains what “machine learning” means in simple words.", answer: "Chatbot", why: "it answers in one step." },
+        { text: "Finds three train connections, compares prices and fills in the booking form.", answer: "Agent", why: "it plans several steps and uses a website for you." },
+        { text: "Rewrites your paragraph so it sounds more formal.", answer: "Chatbot", why: "one request, one answer." },
+        { text: "Checks your inbox each morning, summarises new emails and adds to-dos to your list.", answer: "Agent", why: "it acts on its own, on a schedule, across apps." },
+        { text: "Suggests five title ideas for your presentation.", answer: "Chatbot", why: "it gives you ideas and you decide what to do." },
+        { text: "Collects data from a website, makes a chart and emails it to your team.", answer: "Agent", why: "it chains several tools together to finish a job." }
+      ],
+      reflection: "What task would you hand to an agent?"
+    }
+  },
+  {
+    letter: "F", unit: 6, title: "The Next Wave of AI Tools",
+    color: "#FCE38A", accent: "#FF8FA3", landmark: "rocket",
+    intro: "The AI landscape changes fast. This island is our lookout point: we’ll try new tools together, compare them, and practise judging new AI tools with a curious but critical eye.",
+    lessons: [
+      { id: "6.1", title: "Meta Muse", desc: "A newer AI tool we’ll explore together in class." },
+      { id: "6.2", title: "Manus Cue!", desc: "Explore in class what it does and where it might help you." },
+      { id: "6.3", title: "Hark Pro", desc: "Explore in class and form your own first impression." },
+      { id: "6.4", title: "OpenAI Dots", desc: "Explore in class: try it out and note what surprises you." },
+      { id: "6.5", title: "Grok Bot", desc: "Explore in class and compare it with tools you already know." },
+      { id: "6.6", title: "Claude Duet", desc: "Explore in class by testing it on a small, real task." }
+    ],
+    activity: {
+      type: "flip", title: "Tool explorer",
+      instructions: "Flip two cards to pick the tools you want to compare, then write one sentence about what you’d try first."
+      /* The cards use this island's lesson titles automatically. */
+    }
+  }
+];
+
+/* ------------------------------------------------------------------
+   Small helpers
+   ------------------------------------------------------------------ */
+const $ = (sel, root = document) => root.querySelector(sel);
+const store = {   // sessionStorage, so settings are remembered for this browser session only
+  get(k, d) { try { const v = sessionStorage.getItem("islands." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { sessionStorage.setItem("islands." + k, JSON.stringify(v)); } catch (e) { /* storage blocked: ignore */ } }
+};
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function announce(msg) { const el = $("#srStatus"); el.textContent = ""; setTimeout(() => { el.textContent = msg; }, 30); }
+
+/* ------------------------------------------------------------------
+   Shared app object: the 3D module (Part 2) hooks into this.
+   ------------------------------------------------------------------ */
+const App = window.App = {
+  islands: ISLANDS,
+  labels: [],
+  current: -1,          // index of the open island, -1 = overview
+  panelOpen: false,
+  lowStim: false,
+  is3D: true,
+  sceneReady: false,
+  fallbackShown: false,
+  scene: null           // set by the 3D module: { flyToIsland, flyToOverview, refreshInset, setLowStim, setLabelHot }
+};
+
+const panel = $("#panel"), panelBody = $("#panelBody"), backBtn = $("#backBtn");
+const labelsWrap = $("#labels"), listDialog = $("#listDialog");
+
+/* Keep the panel and back button below the top bar (its height varies) */
+function syncTopOffset() {
+  const bottom = $("#topbar").getBoundingClientRect().bottom;
+  document.documentElement.style.setProperty("--panel-top", Math.round(bottom + 10) + "px");
+  if (App.scene) App.scene.refreshInset();
+}
+window.addEventListener("resize", syncTopOffset);
+if ("ResizeObserver" in window) new ResizeObserver(syncTopOffset).observe($("#topbar"));
+syncTopOffset();
+
+/* ------------------------------------------------------------------
+   Island labels: these HTML buttons float above the 3D islands.
+   They are the keyboard path into the scene (Tab, then Enter).
+   ------------------------------------------------------------------ */
+ISLANDS.forEach((isl, i) => {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "island-label";
+  b.style.setProperty("--c", isl.color);
+  b.innerHTML = `<span class="letter" aria-hidden="true">${isl.letter}</span><span class="lname" aria-hidden="true">Island ${isl.letter}</span>`;
+  b.setAttribute("aria-label", `Island ${isl.letter}, Unit ${isl.unit}: ${isl.title}. Press Enter to explore.`);
+  b.addEventListener("click", () => openIsland(i));
+  b.addEventListener("focus", () => App.scene && App.scene.setLabelHot(i, true));
+  b.addEventListener("blur", () => App.scene && App.scene.setLabelHot(i, false));
+  b.addEventListener("mouseenter", () => App.scene && App.scene.setLabelHot(i, true));
+  b.addEventListener("mouseleave", () => App.scene && App.scene.setLabelHot(i, false));
+  labelsWrap.appendChild(b);
+  App.labels.push(b);
+});
+
+/* ------------------------------------------------------------------
+   Panel: open / close / render
+   ------------------------------------------------------------------ */
+function openIsland(i) {
+  const isl = ISLANDS[i];
+  App.current = i;
+  renderPanel(isl, i);
+  panel.style.setProperty("--c", isl.color);
+  panel.classList.add("open");
+  panel.removeAttribute("inert");
+  panel.setAttribute("aria-hidden", "false");
+  App.panelOpen = true;
+  backBtn.hidden = false;
+  hideHint();
+  closeList(false);
+  App.labels.forEach((l, k) => l.classList.toggle("selected", k === i));
+  if (App.scene) { App.scene.flyToIsland(i); requestAnimationFrame(() => App.scene.refreshInset()); }
+  $("#panelTitle").focus({ preventScroll: true });
+  announce(`Opened Island ${isl.letter}: ${isl.title}`);
+}
+
+function closePanel() {
+  if (!App.panelOpen) return;
+  const i = App.current;
+  panel.classList.remove("open");
+  panel.setAttribute("inert", "");
+  panel.setAttribute("aria-hidden", "true");
+  App.panelOpen = false;
+  App.current = -1;
+  backBtn.hidden = true;
+  App.labels.forEach(l => l.classList.remove("selected"));
+  if (App.scene) { App.scene.flyToOverview(); App.scene.refreshInset(); }
+  // Return focus to where the user came from
+  const target = App.is3D && App.sceneReady ? App.labels[i] : $(`#fallbackList [data-island="${i}"]`);
+  if (target) target.focus({ preventScroll: true });
+  announce("Back to the overview of all islands");
+}
+App.openIsland = openIsland;
+App.closePanel = closePanel;
+
+function renderPanel(isl, i) {
+  const prev = (i + ISLANDS.length - 1) % ISLANDS.length, next = (i + 1) % ISLANDS.length;
+  panelBody.innerHTML = `
+    <div class="panel-head">
+      <div class="kicker"><span class="dot" aria-hidden="true"></span>Island ${isl.letter} · Unit ${isl.unit}</div>
+      <h2 id="panelTitle" tabindex="-1">${isl.title}</h2>
+      <button class="icon-btn" type="button" data-close aria-label="Close panel and go back to overview">×</button>
+    </div>
+    <div class="panel-scroll">
+      <p class="intro">${isl.intro}</p>
+      <h3>Lessons in this unit</h3>
+      <ol class="lessons">
+        ${isl.lessons.map(l => `<li><span class="num">${l.id}</span><span><strong>${l.title}</strong><span class="desc">${l.desc}</span></span></li>`).join("")}
+      </ol>
+      <section class="activity" aria-labelledby="actTitle">
+        <h3 id="actTitle"><span aria-hidden="true">✦ </span>Activity: ${isl.activity.title}</h3>
+        <p class="instr">${isl.activity.instructions}</p>
+        <div id="activityRoot"></div>
+      </section>
+      <nav class="panel-nav" aria-label="Other islands">
+        <button class="btn-soft" type="button" data-go="${prev}">← Island ${ISLANDS[prev].letter}</button>
+        <button class="btn-soft" type="button" data-go="${next}">Island ${ISLANDS[next].letter} →</button>
+      </nav>
+    </div>`;
+  ACTIVITIES[isl.activity.type]($("#activityRoot"), isl.activity, isl);
+}
+
+panel.addEventListener("click", e => {
+  if (e.target.closest("[data-close]")) closePanel();
+  const go = e.target.closest("[data-go]");
+  if (go) openIsland(+go.dataset.go);
+});
+backBtn.addEventListener("click", closePanel);
+
+/* ------------------------------------------------------------------
+   Activities (one renderer per type)
+   ------------------------------------------------------------------ */
+const ACTIVITIES = {
+
+  /* Island A: click a task, then a tool */
+  match(root, act) {
+    const n = act.pairs.length;
+    const toolOrder = shuffle([...Array(n).keys()]);
+    const done = new Map();            // pair index → number shown on both chips
+    let selTask = null, selTool = null;
+
+    const chip = (kind, i, text) => {
+      const isDone = done.has(i);
+      const sel = kind === "task" ? selTask === i : selTool === i;
+      return `<button type="button" class="chip ${isDone ? "matched" : ""}" data-${kind}="${i}" aria-pressed="${sel}" ${isDone ? 'aria-disabled="true"' : ""}>
+        ${isDone ? `<span class="badge" aria-label="pair ${done.get(i)}">${done.get(i)}</span>` : ""}<span>${text}</span></button>`;
+    };
+    const draw = (msg, tone) => {
+      root.innerHTML = `
+        <div class="match">
+          <div class="match-col"><h4>Task</h4>${act.pairs.map((p, i) => chip("task", i, p[0])).join("")}</div>
+          <div class="match-col"><h4>Tool</h4>${toolOrder.map(i => chip("tool", i, act.pairs[i][1])).join("")}</div>
+        </div>
+        <p class="feedback ${tone || ""}" role="status">${msg || ""}</p>
+        ${done.size === n ? '<div class="row"><button type="button" class="btn-soft" data-act="reset">Play again</button></div>' : ""}`;
+    };
+    draw("Start by picking a task on the left.");
+
+    root.onclick = e => {
+      const b = e.target.closest("button"); if (!b) return;
+      if (b.dataset.act === "reset") { ACTIVITIES.match(root, act); return; }
+      if (b.dataset.task != null) { const i = +b.dataset.task; if (done.has(i)) return; selTask = i; }
+      else if (b.dataset.tool != null) { const i = +b.dataset.tool; if (done.has(i)) return; selTool = i; }
+      else return;
+
+      let msg, tone = "";
+      if (selTask != null && selTool != null) {
+        if (selTask === selTool) {
+          done.set(selTask, done.size + 1);
+          msg = done.size === n ? "All matched. You know your toolbox! 🎉" : `Nice match! “${act.pairs[selTask][1]}” fits that task.`;
+          tone = "good"; selTask = null;
+        } else {
+          msg = `Not quite: “${act.pairs[selTool][1]}” belongs to a different task. Try another tool!`;
+          tone = "warn";
+        }
+        selTool = null;
+      } else {
+        msg = selTask != null ? "Now pick the tool that fits." : "Now pick the task it belongs to.";
+      }
+      const key = b.dataset.task != null ? `[data-task="${b.dataset.task}"]` : `[data-tool="${b.dataset.tool}"]`;
+      draw(msg, tone);
+      const again = root.querySelector(key); if (again) again.focus();
+    };
+  },
+
+  /* Island B: pick the right task for each scenario */
+  scenario(root, act) {
+    let idx = 0, firstTry = 0, tried = false, solved = false;
+    const total = act.items.length;
+    const draw = (msg = "", tone = "") => {
+      const it = act.items[idx];
+      const last = idx === total - 1;
+      root.innerHTML = `
+        <p class="progress">Scenario ${idx + 1} of ${total}</p>
+        <p class="scenario-q">${it.q}</p>
+        <div class="options">${it.options.map((o, k) =>
+          `<button type="button" class="chip" data-opt="${k}" ${solved ? "disabled" : ""} ${solved && k === it.answer ? "data-correct" : ""}>${o}</button>`).join("")}</div>
+        <p class="feedback ${tone}" role="status">${msg}</p>
+        ${solved ? (last
+          ? `<p><strong>You solved ${firstTry} of ${total} on the first try. Great thinking!</strong></p><div class="row"><button type="button" class="btn-soft" data-act="restart">Start again</button></div>`
+          : `<div class="row"><button type="button" class="btn" data-act="next">Next scenario →</button></div>`) : ""}`;
+    };
+    draw();
+    root.onclick = e => {
+      const b = e.target.closest("button"); if (!b) return;
+      if (b.dataset.act === "next") { idx++; tried = false; solved = false; draw(); root.querySelector(".chip").focus(); return; }
+      if (b.dataset.act === "restart") { ACTIVITIES.scenario(root, act); root.querySelector(".chip").focus(); return; }
+      if (b.dataset.opt == null) return;
+      const k = +b.dataset.opt, it = act.items[idx];
+      if (k === it.answer) {
+        if (!tried) firstTry++;
+        solved = true;
+        draw(`Yes! ${it.why}`, "good");
+        const nb = root.querySelector("[data-act]"); if (nb) nb.focus();
+      } else {
+        tried = true;
+        draw(`Good thought! But ${it.options[k]} answers a different question. Have another look.`, "warn");
+        root.querySelector(`[data-opt="${k}"]`).focus();
+      }
+    };
+  },
+
+  /* Island C: click pipeline steps in order */
+  order(root, act) {
+    let r = 0;
+    const startRound = () => {
+      const round = act.rounds[r], n = round.steps.length;
+      let order = shuffle([...Array(n).keys()]);
+      if (order.every((v, i) => v === i)) order.reverse();
+      let picked = [], solved = false;
+
+      const draw = (msg = "", tone = "") => {
+        const shown = solved ? [...Array(n).keys()] : order;
+        root.innerHTML = `
+          <p class="progress">Pipeline ${r + 1} of ${act.rounds.length}: ${round.name}</p>
+          <div class="steps">${shown.map(i => {
+            const pos = picked.indexOf(i);
+            return `<button type="button" class="chip step ${pos >= 0 ? "picked" : ""}" data-step="${i}" ${pos >= 0 || solved ? 'aria-disabled="true"' : ""}>
+              <span class="badge">${solved ? i + 1 : pos >= 0 ? pos + 1 : "?"}</span><span>${round.steps[i][0]}</span>
+              ${solved ? `<span class="tag">${round.steps[i][1]}</span>` : ""}</button>`;
+          }).join("")}</div>
+          <div class="row">
+            ${solved
+              ? (r < act.rounds.length - 1
+                  ? `<button type="button" class="btn" data-act="next">Next pipeline →</button>`
+                  : `<button type="button" class="btn-soft" data-act="restart">Play again</button>`)
+              : `<button type="button" class="btn-soft" data-act="undo" ${picked.length ? "" : "disabled"}>Undo</button>
+                 <button type="button" class="btn" data-act="check" ${picked.length === n ? "" : "disabled"}>Check order</button>`}
+          </div>
+          <p class="feedback ${tone}" role="status">${msg}</p>`;
+      };
+      draw("Click the first step.");
+
+      root.onclick = e => {
+        const b = e.target.closest("button"); if (!b) return;
+        const a = b.dataset.act;
+        if (a === "next") { r++; startRound(); root.querySelector(".step").focus(); return; }
+        if (a === "restart") { r = 0; startRound(); root.querySelector(".step").focus(); return; }
+        if (a === "undo") { picked.pop(); draw(picked.length ? "Step removed." : "Click the first step."); return; }
+        if (a === "check") {
+          if (picked.every((v, i) => v === i)) {
+            solved = true;
+            draw(r < act.rounds.length - 1 ? "Perfect: input → model → output! 🎉" : "Perfect! You’ve ordered all three pipelines. Every AI app follows this pattern. 🎉", "good");
+            const nb = root.querySelector("[data-act]"); if (nb) nb.focus();
+          } else {
+            picked = [];
+            draw("Almost! Ask yourself: what has to exist before the model can work? Try again.", "warn");
+            root.querySelector(".step").focus();
+          }
+          return;
+        }
+        if (b.dataset.step != null && !solved) {
+          const i = +b.dataset.step;
+          if (picked.includes(i)) return;
+          picked.push(i);
+          draw(picked.length === n ? "All steps placed. Press “Check order”." : `Step ${picked.length} placed. What comes next?`);
+          const nb = picked.length === n ? root.querySelector('[data-act="check"]') : root.querySelector(`[data-step="${i}"]`);
+          if (nb) nb.focus();
+        }
+      };
+    };
+    startRound();
+  },
+
+  /* Island D: design your own helper */
+  helper(root, act) {
+    root.innerHTML = `
+      <form class="helper">
+        <fieldset><legend>1. Choose a goal</legend>
+          ${act.goals.map((g, k) => `<label class="opt"><input type="radio" name="goal" value="${k}" ${k === 0 ? "checked" : ""}><span>${g}</span></label>`).join("")}
+        </fieldset>
+        <fieldset><legend>2. Tick the features you would combine</legend>
+          ${act.features.map((f, k) => `<label class="opt"><input type="checkbox" name="feat" value="${k}"><span><strong>${f.name}</strong> <span class="muted">${f.role}</span></span></label>`).join("")}
+        </fieldset>
+        <button type="submit" class="btn">Build my helper</button>
+        <div class="feedback" role="status"></div>
+      </form>`;
+    const form = root.querySelector("form"), out = root.querySelector(".feedback");
+    form.onsubmit = e => {
+      e.preventDefault();
+      const goal = act.goals[+form.querySelector("input[name=goal]:checked").value];
+      const feats = [...form.querySelectorAll("input[name=feat]:checked")].map(x => act.features[+x.value]);
+      if (!feats.length) { out.className = "feedback warn"; out.textContent = "Tick at least one feature to give your helper a superpower."; return; }
+      const closing = feats.length === 1 ? "A simple, focused helper is a great place to start."
+        : feats.length >= 4 ? "Ambitious! Try building it step by step: start with two features, then add more."
+        : "A nice combination! Sketch it out and try it during Lessons 4.5–4.7.";
+      out.className = "feedback good";
+      out.innerHTML = `<span>Your helper for “${goal}”:</span>
+        <ul class="summary-list">${feats.map(f => `<li>${f.name} ${f.role}</li>`).join("")}</ul>
+        <span style="display:block;margin-top:6px">${closing}</span>`;
+    };
+  },
+
+  /* Island E: agent-or-chatbot sorting + reflection */
+  sort(root, act) {
+    const state = act.cards.map(() => "");   // "", "retry", "ok"
+    root.innerHTML = `
+      <div class="sort-area"></div>
+      <div class="reflect">
+        <label for="reflectE"><strong>Reflection:</strong> ${act.reflection}</label>
+        <textarea id="reflectE" rows="3" placeholder="e.g. Collect the opening hours of five libraries and put them in a table…"></textarea>
+        <div class="row"><button type="button" class="btn" data-act="save">Save my idea</button></div>
+        <p class="feedback" role="status" id="reflectOut"></p>
+      </div>`;
+    const area = root.querySelector(".sort-area"), ta = root.querySelector("#reflectE");
+    ta.value = store.get("reflectE", "");
+    const draw = () => {
+      const ok = state.filter(s => s === "ok").length;
+      area.innerHTML = `
+        <p class="progress">${ok} of ${act.cards.length} sorted${ok === act.cards.length ? ". All done! 🎉" : ""}</p>
+        <ul class="cards">${act.cards.map((c, i) => `
+          <li class="card ${state[i] === "ok" ? "done" : ""}">
+            <p>${c.text}</p>
+            ${state[i] === "ok"
+              ? `<p class="card-result">✓ ${c.answer}: ${c.why}</p>`
+              : `<div class="row">
+                   <button type="button" class="chip" data-card="${i}" data-pick="Chatbot"><span aria-hidden="true">💬</span> Chatbot</button>
+                   <button type="button" class="chip" data-card="${i}" data-pick="Agent"><span aria-hidden="true">🤖</span> Agent</button>
+                 </div>
+                 ${state[i] === "retry" ? `<p class="hintline" role="status">Hmm, look again: does it just answer, or does it take several actions on its own?</p>` : ""}`}
+          </li>`).join("")}</ul>`;
+    };
+    draw();
+    root.onclick = e => {
+      const b = e.target.closest("button"); if (!b) return;
+      if (b.dataset.act === "save") {
+        store.set("reflectE", ta.value.trim());
+        const out = root.querySelector("#reflectOut");
+        if (!ta.value.trim()) { out.className = "feedback warn"; out.textContent = "Write a short idea first. One sentence is enough."; return; }
+        out.className = "feedback good";
+        out.textContent = "Saved for this session ✓ Bring it to class. Think about what a human should still double-check.";
+        return;
+      }
+      if (b.dataset.card == null) return;
+      const i = +b.dataset.card;
+      state[i] = b.dataset.pick === act.cards[i].answer ? "ok" : "retry";
+      draw();
+      announce(state[i] === "ok" ? `Correct, ${act.cards[i].answer}.` : "Not quite, try again.");
+      const nextBtn = area.querySelector(`[data-card="${i}"]`) || area.querySelector("[data-card]");
+      if (nextBtn) nextBtn.focus();
+    };
+  },
+
+  /* Island F: tool explorer card flip */
+  flip(root, act, isl) {
+    const tools = isl.lessons;
+    let picks = store.get("pickF", []).filter(i => i < tools.length).slice(0, 2);
+    root.innerHTML = `
+      <div class="flip-grid">${tools.map((t, i) => `
+        <button type="button" class="flip" data-i="${i}" aria-pressed="false">
+          <span class="flip-inner">
+            <span class="flip-face"><small>Lesson ${t.id}</small><strong>${t.title}</strong><small>Tap to flip</small></span>
+            <span class="flip-face flip-back" aria-hidden="true">
+              <strong>${t.title}</strong>
+              <span>Explore in class:</span>
+              <ul><li>What goes in?</li><li>What comes out?</li><li>Who is it for?</li></ul>
+            </span>
+          </span>
+        </button>`).join("")}</div>
+      <div class="compare" aria-live="polite"></div>`;
+    const cmp = root.querySelector(".compare");
+
+    const update = () => {
+      root.querySelectorAll(".flip").forEach(btn => {
+        const i = +btn.dataset.i, on = picks.includes(i);
+        btn.setAttribute("aria-pressed", String(on));
+        btn.setAttribute("aria-label", `${tools[i].title}${on ? ", selected for comparison" : ""}. Press to ${on ? "unselect" : "select"}.`);
+        btn.querySelector(".flip-back").setAttribute("aria-hidden", String(!on));
+      });
+      store.set("pickF", picks);
+      if (picks.length < 2) {
+        cmp.innerHTML = `<p class="muted" style="margin:0">Pick ${2 - picks.length} more tool${picks.length === 1 ? "" : "s"} to compare.</p>`;
+        return;
+      }
+      const [a, b] = picks.map(i => tools[i].title);
+      cmp.innerHTML = `
+        <p>You’re comparing <strong>${a}</strong> and <strong>${b}</strong>.</p>
+        <label for="tryFirst">Which would you try first, and what for? (one sentence)</label>
+        <textarea id="tryFirst" rows="2" placeholder="I’d try … first, because …"></textarea>
+        <div class="row"><button type="button" class="btn" data-act="saveF">Save</button></div>
+        <p class="feedback" role="status" id="flipOut"></p>`;
+      const ta = cmp.querySelector("textarea");
+      ta.value = store.get("tryFirst", "");
+      ta.oninput = () => store.set("tryFirst", ta.value);
+    };
+    update();
+
+    root.onclick = e => {
+      const b = e.target.closest("button"); if (!b) return;
+      if (b.dataset.act === "saveF") {
+        const ta = cmp.querySelector("textarea"), out = cmp.querySelector("#flipOut");
+        store.set("tryFirst", ta.value.trim());
+        if (!ta.value.trim()) { out.className = "feedback warn"; out.textContent = "Write one sentence first. A rough idea is fine!"; return; }
+        out.className = "feedback good";
+        out.textContent = "Saved for this session ✓ We’ll test these ideas together in class.";
+        return;
+      }
+      if (b.dataset.i == null) return;
+      const i = +b.dataset.i;
+      if (picks.includes(i)) picks = picks.filter(x => x !== i);
+      else { picks.push(i); if (picks.length > 2) picks.shift(); }   // keep the two most recent picks
+      update();
+    };
+  }
+};
+
+/* ------------------------------------------------------------------
+   Text-only island list (dialog + fallback)
+   ------------------------------------------------------------------ */
+function islandListHTML() {
+  return `<ul class="island-list">${ISLANDS.map((isl, i) => `
+    <li><button type="button" data-island="${i}" style="--c:${isl.color}">
+      <span class="letter" aria-hidden="true">${isl.letter}</span>
+      <span><strong>Island ${isl.letter} · Unit ${isl.unit}</strong><span class="sub">${isl.title}</span></span>
+    </button></li>`).join("")}</ul>`;
+}
+$("#listBody").innerHTML = islandListHTML();
+let listReturnFocus = null;
+
+function openList() {
+  if (!App.is3D) { const f = $("#fallbackList button"); if (f) f.focus(); return; }
+  listReturnFocus = document.activeElement;
+  listDialog.hidden = false;
+  $("#listBody button").focus();
+}
+function closeList(restoreFocus = true) {
+  if (listDialog.hidden) return;
+  listDialog.hidden = true;
+  if (restoreFocus && listReturnFocus) listReturnFocus.focus();
+}
+$("#skipBtn").addEventListener("click", openList);
+$("#listClose").addEventListener("click", () => closeList());
+listDialog.addEventListener("click", e => {
+  if (e.target === listDialog) closeList();
+  const b = e.target.closest("[data-island]");
+  if (b) { closeList(false); openIsland(+b.dataset.island); }
+});
+// Keep Tab inside the open list dialog
+listDialog.addEventListener("keydown", e => {
+  if (e.key !== "Tab") return;
+  const f = [...listDialog.querySelectorAll("button")];
+  const first = f[0], last = f[f.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
+
+/* Called by the 3D module (or the load timeout) when 3D isn't possible */
+App.showFallback = function (reason) {
+  if (App.fallbackShown || App.sceneReady) return;
+  App.fallbackShown = true;
+  App.is3D = false;
+  document.body.classList.add("no3d");
+  $("#loading").hidden = true;
+  labelsWrap.hidden = true;
+  $("#hint").hidden = true;
+  $("#fallbackMsg").textContent = reason === "webgl"
+    ? "Your browser or device can’t show the 3D view (WebGL is unavailable). No problem: all islands are listed below."
+    : "The 3D view couldn’t load (maybe you’re offline or a script was blocked). No problem: all islands are listed below.";
+  const fl = $("#fallbackList");
+  fl.innerHTML = islandListHTML();
+  fl.addEventListener("click", e => { const b = e.target.closest("[data-island]"); if (b) openIsland(+b.dataset.island); });
+  $("#fallback").hidden = false;
+};
+// If the 3D library hasn't arrived after a while, show the text version
+setTimeout(() => { if (!App.sceneReady) App.showFallback("load"); }, 20000);
+
+/* Called by the 3D module once the scene is rendering */
+App.onSceneReady = function () {
+  App.sceneReady = true;
+  $("#loading").hidden = true;
+  labelsWrap.hidden = false;
+  showHint();
+};
+
+/* ------------------------------------------------------------------
+   First-load hint
+   ------------------------------------------------------------------ */
+const hint = $("#hint");
+let hintTimer = null;
+function showHint() {
+  if (store.get("hintSeen", false)) return;
+  if (window.matchMedia("(pointer: coarse)").matches) {
+    $("#hintText").textContent = "Drag to rotate, pinch to zoom, tap an island to explore.";
+  }
+  hint.hidden = false;
+  hintTimer = setTimeout(hideHint, 12000);
+}
+function hideHint() {
+  if (hint.hidden) return;
+  store.set("hintSeen", true);
+  clearTimeout(hintTimer);
+  if (App.lowStim) { hint.hidden = true; return; }
+  hint.classList.add("fade");
+  setTimeout(() => { hint.hidden = true; hint.classList.remove("fade"); }, 600);
+}
+App.hideHint = hideHint;
+$("#hintOk").addEventListener("click", hideHint);
+
+/* ------------------------------------------------------------------
+   [MUSIC] Gentle ambient music, generated live with the Web Audio API.
+   Soft pad chords (C major family) + a slow pentatonic melody + echo.
+   ------------------------------------------------------------------ */
+const Music = {
+  ctx: null, master: null, bus: null, timer: null,
+  on: false, vol: 0.5,
+  nextChord: 0, nextNote: 0, chordIdx: 0, noteIdx: 3,
+  CHORD_SECONDS: 8,                       // how long each chord lasts
+  CHORDS: [                               // frequencies in Hz
+    [130.81, 196.00, 246.94, 329.63],     // Cmaj7
+    [110.00, 164.81, 261.63, 329.63],     // Am7
+    [87.31, 174.61, 220.00, 261.63],      // Fmaj7
+    [98.00, 146.83, 246.94, 293.66]       // G6
+  ],
+  SCALE: [392.00, 440.00, 523.25, 587.33, 659.25, 783.99, 880.00], // C major pentatonic (G4–A5)
+
+  init() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return false;
+    const c = this.ctx = new AC();
+    this.master = c.createGain(); this.master.gain.value = 0;
+    this.bus = c.createGain(); this.bus.gain.value = 0.8;
+    const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 2000; lp.Q.value = 0.3;
+    const delay = c.createDelay(2); delay.delayTime.value = 0.55;
+    const fb = c.createGain(); fb.gain.value = 0.32;
+    const wet = c.createGain(); wet.gain.value = 0.3;
+    this.bus.connect(lp); lp.connect(this.master);
+    lp.connect(delay); delay.connect(fb); fb.connect(delay); delay.connect(wet); wet.connect(this.master);
+    this.master.connect(c.destination);
+    return true;
+  },
+  pad(freqs, t, dur) {                     // slow-attack, slow-release chord
+    const c = this.ctx;
+    freqs.forEach(f => {
+      [["sine", 1, 0.045], ["triangle", 1.003, 0.018]].forEach(([type, detune, peak]) => {
+        const o = c.createOscillator(), g = c.createGain();
+        o.type = type; o.frequency.value = f * detune;
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(peak, t + 3);
+        g.gain.setValueAtTime(peak, t + dur - 1);
+        g.gain.linearRampToValueAtTime(0, t + dur + 2.5);
+        o.connect(g); g.connect(this.bus);
+        o.start(t); o.stop(t + dur + 3);
+      });
+    });
+  },
+  note(f, t) {                             // soft bell-like melody note
+    const c = this.ctx, o = c.createOscillator(), g = c.createGain();
+    o.type = "sine"; o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.06, t + 0.08);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 3.2);
+    o.connect(g); g.connect(this.bus);
+    o.start(t); o.stop(t + 3.4);
+  },
+  tick() {                                 // schedule ahead so timing stays smooth
+    const now = this.ctx.currentTime, ahead = 1.5;
+    while (this.nextChord < now + ahead) {
+      this.pad(this.CHORDS[this.chordIdx], this.nextChord, this.CHORD_SECONDS);
+      this.chordIdx = (this.chordIdx + 1) % this.CHORDS.length;
+      this.nextChord += this.CHORD_SECONDS;
+    }
+    while (this.nextNote < now + ahead) {
+      if (Math.random() < 0.7) {           // leave some gentle gaps
+        this.noteIdx = Math.max(0, Math.min(this.SCALE.length - 1, this.noteIdx + Math.floor(Math.random() * 5) - 2));
+        this.note(this.SCALE[this.noteIdx], this.nextNote);
+      }
+      this.nextNote += [1.2, 1.6, 2.4][Math.floor(Math.random() * 3)];
+    }
+  },
+  start() {
+    if (!this.ctx && !this.init()) return false;
+    this.ctx.resume();
+    const now = this.ctx.currentTime;
+    this.nextChord = now + 0.1; this.nextNote = now + 1.5;
+    this.master.gain.cancelScheduledValues(now);
+    this.master.gain.setValueAtTime(this.master.gain.value, now);
+    this.master.gain.linearRampToValueAtTime(this.vol * 0.9, now + 2.5);   // fade in
+    clearInterval(this.timer);
+    this.timer = setInterval(() => this.tick(), 250);
+    this.tick();
+    this.on = true;
+    return true;
+  },
+  stop() {
+    this.on = false;
+    clearInterval(this.timer);
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    this.master.gain.cancelScheduledValues(now);
+    this.master.gain.setValueAtTime(this.master.gain.value, now);
+    this.master.gain.linearRampToValueAtTime(0, now + 1.2);                // fade out
+    setTimeout(() => { if (!this.on && this.ctx) this.ctx.suspend(); }, 1400);
+  },
+  setVolume(v) {
+    this.vol = v;
+    if (this.ctx && this.on) this.master.gain.setTargetAtTime(v * 0.9, this.ctx.currentTime, 0.2);
+  }
+};
+
+const musicBtn = $("#musicBtn"), volume = $("#volume");
+function setMusicUI(on) {
+  musicBtn.setAttribute("aria-pressed", String(on));
+  $("#musicText").textContent = App.lowStim ? "Music: Off" : on ? "Music: On" : "Music: Off";
+  musicBtn.setAttribute("aria-label", App.lowStim
+    ? "Background music is off in Low-stimulation mode"
+    : `Background music: ${on ? "on. Press to turn off." : "off. Press to turn on."}`);
+}
+musicBtn.addEventListener("click", () => {
+  const turnOn = !Music.on;
+  if (turnOn) Music.start(); else Music.stop();
+  store.set("musicOn", turnOn);
+  setMusicUI(turnOn);
+});
+volume.value = Math.round(store.get("volume", 0.5) * 100);
+Music.vol = volume.value / 100;
+volume.addEventListener("input", () => { Music.setVolume(volume.value / 100); store.set("volume", volume.value / 100); });
+
+/* Music was on earlier in this session: resume on the first interaction (browsers block autoplay) */
+function resumeMusicOnGesture() {
+  if (App.lowStim || !store.get("musicOn", false)) return;
+  setMusicUI(true);
+  const go = () => { if (!App.lowStim && store.get("musicOn", false) && !Music.on) { Music.start(); setMusicUI(true); } };
+  document.addEventListener("pointerdown", go, { once: true });
+  document.addEventListener("keydown", go, { once: true });
+}
+
+/* ------------------------------------------------------------------
+   Low-stimulation mode
+   ------------------------------------------------------------------ */
+const lowBtn = $("#lowStimBtn");
+function setLowStim(on, save = true) {
+  App.lowStim = on;
+  document.body.classList.toggle("low-stim", on);
+  lowBtn.setAttribute("aria-checked", String(on));
+  if (on) Music.stop();
+  musicBtn.disabled = on;
+  volume.disabled = on;
+  setMusicUI(on ? false : Music.on);
+  if (save) store.set("lowStim", on);
+  if (App.scene) App.scene.setLowStim(on);
+  syncTopOffset();
+}
+lowBtn.addEventListener("click", () => {
+  const on = !App.lowStim;
+  setLowStim(on);
+  announce(on ? "Low-stimulation mode on: motion, effects and music are off." : "Low-stimulation mode off.");
+});
+// Start in low-stimulation mode if chosen earlier this session, or if the OS asks for reduced motion
+const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+setLowStim(store.get("lowStim", prefersReduced), false);
+resumeMusicOnGesture();
+
+/* ------------------------------------------------------------------
+   Global keyboard: Esc closes things, innermost first
+   ------------------------------------------------------------------ */
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  if (!listDialog.hidden) { closeList(); return; }
+  if (App.panelOpen) { closePanel(); return; }
+  hideHint();
+});
+})();
+</script>
+
+
+<!-- =====================================================================
+     PART 2: 3D scene (Three.js). If this can't load, Part 1 shows
+     the text version instead.
+     ===================================================================== -->
+<script type="module">
+const A = window.App;
+
+function hasWebGL() {
+  try {
+    const c = document.createElement("canvas");
+    return !!(window.WebGLRenderingContext && (c.getContext("webgl2") || c.getContext("webgl")));
+  } catch (e) { return false; }
+}
+
+async function main() {
+  let THREE, OrbitControls;
+  try {
+    THREE = await import("three");
+    ({ OrbitControls } = await import("three/addons/controls/OrbitControls.js"));
+  } catch (err) {
+    console.warn("Three.js could not be loaded:", err);
+    A.showFallback("load");
+    return;
+  }
+  if (A.fallbackShown) return;
+  if (!hasWebGL()) { A.showFallback("webgl"); return; }
+
+  /* ---------------- Renderer, scene, camera ---------------- */
+  const canvas = document.getElementById("scene");
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "low-power" });
+  } catch (err) { A.showFallback("webgl"); return; }
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));   // cap for performance
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
+  canvas.addEventListener("webglcontextlost", e => { e.preventDefault(); A.sceneReady = false; A.showFallback("webgl"); });
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 400);
+
+  /* [SKY] Background colors */
+  const SKY = { top: 0x8FA3E6, mid: 0xCFC6F2, bottom: 0xF6DCE8, sea: 0xBCD8F2, fog: 0xF4DCE8, flat: 0xE9E6F2 };
+  scene.fog = new THREE.Fog(SKY.fog, 42, 115);
+
+  /* ---------------- Lights (no shadow maps, for performance) ---------------- */
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xD9C8F0, 1.7));
+  const sun = new THREE.DirectionalLight(0xFFF1E0, 1.9);
+  sun.position.set(8, 14, 10);
+  scene.add(sun);
+
+  /* ---------------- Helpers ---------------- */
+  const lam = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
+  const add = (parent, geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m); return m; };
+  function radialTexture(size, stops) {
+    const c = document.createElement("canvas"); c.width = c.height = size;
+    const g = c.getContext("2d"), grd = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    stops.forEach(([o, col]) => grd.addColorStop(o, col));
+    g.fillStyle = grd; g.fillRect(0, 0, size, size);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  }
+  const dotTex = radialTexture(64, [[0, "rgba(255,255,255,1)"], [0.4, "rgba(255,255,255,.6)"], [1, "rgba(255,255,255,0)"]]);
+  const glowTex = radialTexture(128, [[0, "rgba(255,255,255,.9)"], [0.35, "rgba(255,255,255,.45)"], [1, "rgba(255,255,255,0)"]]);
+
+  /* ---------------- Backdrop: gradient sky, sea, stars, clouds, motes ---------------- */
+  const sky = new THREE.Mesh(
+    new THREE.SphereGeometry(200, 32, 16),
+    new THREE.ShaderMaterial({
+      side: THREE.BackSide, depthWrite: false,
+      uniforms: { top: { value: new THREE.Color(SKY.top) }, mid: { value: new THREE.Color(SKY.mid) }, bottom: { value: new THREE.Color(SKY.bottom) } },
+      vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: `uniform vec3 top; uniform vec3 mid; uniform vec3 bottom; varying vec3 vDir;
+        void main(){ float h = vDir.y;
+          vec3 c = h > 0.0 ? mix(mid, top, smoothstep(0.0, 0.65, h)) : mix(mid, bottom, smoothstep(0.0, 0.25, -h));
+          gl_FragColor = vec4(c, 1.0);
+          #include <colorspace_fragment>
+        }`
+    })
+  );
+  scene.add(sky);
+
+  const sea = new THREE.Mesh(new THREE.CircleGeometry(160, 48), new THREE.MeshLambertMaterial({ color: SKY.sea }));
+  sea.rotation.x = -Math.PI / 2; sea.position.y = -8;
+  scene.add(sea);
+
+  // Stars: fixed, soft, no twinkling
+  const starPos = [];
+  for (let i = 0; i < 380; i++) {
+    const th = Math.random() * Math.PI * 2, y = 0.25 + Math.random() * 0.75, r = Math.sqrt(1 - y * y);
+    starPos.push(Math.cos(th) * r * 150, y * 150, Math.sin(th) * r * 150);
+  }
+  const starGeo = new THREE.BufferGeometry();
+  starGeo.setAttribute("position", new THREE.Float32BufferAttribute(starPos, 3));
+  const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ size: 1.3, map: dotTex, transparent: true, opacity: 0.75, depthWrite: false, fog: false }));
+  scene.add(stars);
+
+  // Clouds: little clusters of soft spheres, drifting slowly around the ring
+  const clouds = new THREE.Group();
+  const cloudMat = new THREE.MeshLambertMaterial({ color: 0xFFFFFF, transparent: true, opacity: 0.88, flatShading: true });
+  const puffGeo = new THREE.IcosahedronGeometry(1, 1);
+  for (let i = 0; i < 10; i++) {
+    const c = new THREE.Group();
+    const puffs = 3 + Math.floor(Math.random() * 3);
+    for (let k = 0; k < puffs; k++) {
+      const p = new THREE.Mesh(puffGeo, cloudMat);
+      const s = 0.7 + Math.random() * 0.6;
+      p.scale.set(s * 1.2, s * 0.8, s);
+      p.position.set((k - puffs / 2) * 1.0, Math.random() * 0.4, Math.random() * 0.6);
+      c.add(p);
+    }
+    const a = (i / 10) * Math.PI * 2 + Math.random() * 0.3, r = 19 + Math.random() * 8;
+    c.position.set(Math.cos(a) * r, -4 + Math.random() * 7, Math.sin(a) * r);
+    c.rotation.y = -a;
+    c.scale.setScalar(1 + Math.random() * 0.8);
+    clouds.add(c);
+  }
+  scene.add(clouds);
+
+  // Floating motes: a few tiny, slow-rising specks of light
+  const MOTES = 70, motePos = new Float32Array(MOTES * 3);
+  for (let i = 0; i < MOTES; i++) {
+    const a = Math.random() * Math.PI * 2, r = 4 + Math.random() * 12;
+    motePos.set([Math.cos(a) * r, -4 + Math.random() * 11, Math.sin(a) * r], i * 3);
+  }
+  const moteGeo = new THREE.BufferGeometry();
+  moteGeo.setAttribute("position", new THREE.BufferAttribute(motePos, 3));
+  const motes = new THREE.Points(moteGeo, new THREE.PointsMaterial({ size: 0.22, map: dotTex, transparent: true, opacity: 0.6, depthWrite: false, color: 0xFFF6E0 }));
+  scene.add(motes);
+
+  /* ---------------- Islands ---------------- */
+  const R = 1.7;                                        // island radius
+  const surfaceY = (x, z) => 0.35 * Math.sqrt(Math.max(0, R * R - x * x - z * z));
+  const SOIL = lam(0xE6CBB0), SOIL_DARK = lam(0xD3B394);
+  const TRUNK = lam(0xB08968);
+  const LEAVES = [lam(0x8FD3A8), lam(0x9EDDB6), lam(0x7FC79B)];
+
+  function tree(g, x, z, s = 1, k = 0) {
+    const y = surfaceY(x, z) - 0.03;
+    add(g, new THREE.CylinderGeometry(0.05 * s, 0.07 * s, 0.3 * s, 6), TRUNK, x, y + 0.15 * s, z);
+    if (k % 2) add(g, new THREE.IcosahedronGeometry(0.3 * s, 0), LEAVES[k % 3], x, y + 0.48 * s, z);
+    else add(g, new THREE.ConeGeometry(0.28 * s, 0.62 * s, 7), LEAVES[k % 3], x, y + 0.6 * s, z);
+  }
+  function flower(g, x, z, color) {
+    const y = surfaceY(x, z);
+    add(g, new THREE.SphereGeometry(0.07, 8, 6), lam(color), x, y + 0.05, z);
+  }
+
+  /* Landmarks: one tiny scene per island, built from simple shapes.
+     Each returns an animation function (t = seconds), or nothing. */
+  const LANDMARKS = {
+    cameraTower(g, accent) {               // perceptual AI: a little camera on a tower
+      const y0 = surfaceY(0, 0) - 0.05;
+      add(g, new THREE.CylinderGeometry(0.42, 0.5, 0.14, 10), lam(0xF4EEE6), 0, y0 + 0.07, 0);
+      add(g, new THREE.CylinderGeometry(0.15, 0.24, 1.3, 8), lam(0xFFFFFF), 0, y0 + 0.78, 0);
+      add(g, new THREE.CylinderGeometry(0.205, 0.215, 0.12, 8), lam(accent), 0, y0 + 0.5, 0);
+      add(g, new THREE.CylinderGeometry(0.175, 0.185, 0.12, 8), lam(accent), 0, y0 + 1.0, 0);
+      const head = new THREE.Group(); head.position.set(0, y0 + 1.6, 0); g.add(head);
+      add(head, new THREE.BoxGeometry(0.62, 0.4, 0.44), lam(0x7B86C4));
+      add(head, new THREE.BoxGeometry(0.2, 0.1, 0.2), lam(0x5D679E), -0.12, 0.25, 0);
+      const lens = add(head, new THREE.CylinderGeometry(0.14, 0.17, 0.24, 14), lam(0x3A416C), 0, 0, 0.32);
+      lens.rotation.x = Math.PI / 2;
+      add(head, new THREE.SphereGeometry(0.1, 12, 8), lam(0xBFE6FF, { emissive: 0x2A4766 }), 0, 0, 0.44);
+      add(head, new THREE.SphereGeometry(0.045, 8, 6), lam(accent), 0.22, 0.13, 0.23);   // steady light, never blinks
+      return t => { head.rotation.y = Math.sin(t * 0.35) * 0.6; };
+    },
+
+    faceHill(g, accent) {                  // face landmarks: a smiling hill with landmark dots
+      const y0 = surfaceY(0, 0);
+      const face = new THREE.Group(); face.position.set(0, y0 + 0.15, 0); g.add(face);
+      const head = add(face, new THREE.SphereGeometry(0.78, 18, 14), lam(0xFFF0E2), 0, 0.2, 0);
+      head.scale.set(1, 0.95, 0.85);
+      const ink = lam(0x3B3F5C);
+      add(face, new THREE.SphereGeometry(0.075, 10, 8), ink, -0.24, 0.42, 0.58);
+      add(face, new THREE.SphereGeometry(0.075, 10, 8), ink, 0.24, 0.42, 0.58);
+      [-0.43, 0.43].forEach(x => { const ch = add(face, new THREE.SphereGeometry(0.1, 10, 8), lam(0xFFB3C1), x, 0.2, 0.5); ch.scale.z = 0.4; });
+      const smile = add(face, new THREE.TorusGeometry(0.2, 0.035, 6, 16, Math.PI), ink, 0, 0.24, 0.6);
+      smile.rotation.z = Math.PI;
+      const dotMat = lam(accent);
+      for (let k = 0; k < 12; k++) {      // ring of "landmark" points around the face
+        const a = (k / 12) * Math.PI * 2;
+        add(face, new THREE.SphereGeometry(0.04, 6, 4), dotMat, Math.cos(a) * 0.7, 0.2 + Math.sin(a) * 0.66, 0.34);
+      }
+      return t => { face.rotation.z = Math.sin(t * 0.4) * 0.05; };
+    },
+
+    easel(g, accent) {                     // creative AI: easel with a painting + a chat bubble
+      const y0 = surfaceY(0, 0) - 0.03;
+      const wood = lam(0xC9A27E);
+      const l1 = add(g, new THREE.CylinderGeometry(0.035, 0.035, 1.35, 6), wood, -0.3, y0 + 0.62, 0.06); l1.rotation.z = -0.2;
+      const l2 = add(g, new THREE.CylinderGeometry(0.035, 0.035, 1.35, 6), wood, 0.3, y0 + 0.62, 0.06); l2.rotation.z = 0.2;
+      const l3 = add(g, new THREE.CylinderGeometry(0.035, 0.035, 1.3, 6), wood, 0, y0 + 0.6, -0.26); l3.rotation.x = -0.35;
+      add(g, new THREE.BoxGeometry(0.9, 0.05, 0.14), wood, 0, y0 + 0.55, 0.12);
+      const board = new THREE.Group(); board.position.set(0, y0 + 0.97, 0.1); board.rotation.x = -0.12; g.add(board);
+      add(board, new THREE.BoxGeometry(0.92, 0.72, 0.05), lam(0xFFFFFF));
+      // the painting itself: a little pastel landscape drawn on a canvas
+      const c = document.createElement("canvas"); c.width = 128; c.height = 96;
+      const p = c.getContext("2d");
+      const grd = p.createLinearGradient(0, 0, 0, 96); grd.addColorStop(0, "#BFD7FF"); grd.addColorStop(1, "#FFD9E8");
+      p.fillStyle = grd; p.fillRect(0, 0, 128, 96);
+      p.fillStyle = "#FFE08A"; p.beginPath(); p.arc(92, 28, 14, 0, Math.PI * 2); p.fill();
+      ["#8E7CF0", "#6CC7C2", "#FF9F80"].forEach((col, k) => {
+        p.strokeStyle = col; p.lineWidth = 7; p.beginPath();
+        for (let x = 0; x <= 128; x += 4) p.lineTo(x, 58 + k * 13 + Math.sin(x / 12 + k * 1.3) * 5);
+        p.stroke();
+      });
+      const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+      add(board, new THREE.PlaneGeometry(0.82, 0.62), new THREE.MeshLambertMaterial({ map: tex }), 0, 0, 0.03);
+      const bubble = new THREE.Group(); bubble.position.set(0.95, y0 + 1.35, 0.35); g.add(bubble);
+      const bb = add(bubble, new THREE.SphereGeometry(0.3, 14, 10), lam(0xFFFFFF)); bb.scale.set(1.15, 0.8, 0.45);
+      const tail = add(bubble, new THREE.ConeGeometry(0.08, 0.2, 6), lam(0xFFFFFF), -0.18, -0.24, 0); tail.rotation.z = -0.6;
+      [-0.12, 0, 0.12].forEach(x => add(bubble, new THREE.SphereGeometry(0.045, 8, 6), lam(accent), x, 0, 0.13));
+      const by = bubble.position.y;
+      return t => { bubble.position.y = by + Math.sin(t * 0.8) * 0.06; };
+    },
+
+    gem(g, accent) {                       // Gemini: a gem with two little twin stars
+      const y0 = surfaceY(0, 0) - 0.03;
+      add(g, new THREE.CylinderGeometry(0.34, 0.45, 0.36, 8), lam(0xF2EEF8), 0, y0 + 0.18, 0);
+      const gem = add(g, new THREE.OctahedronGeometry(0.42, 0), lam(0x9CCBF5, { emissive: 0x1E3550 }), 0, y0 + 1.0, 0);
+      gem.scale.y = 1.35;
+      const orbit = new THREE.Group(); orbit.position.set(0, y0 + 1.0, 0); g.add(orbit);
+      const starMat = lam(accent, { emissive: 0x4A3A10 });
+      add(orbit, new THREE.OctahedronGeometry(0.12, 0), starMat, 0.72, 0.15, 0);
+      add(orbit, new THREE.OctahedronGeometry(0.12, 0), starMat, -0.72, -0.1, 0);
+      const book = new THREE.Group(); book.position.set(0.75, surfaceY(0.75, 0.55) + 0.03, 0.55); book.rotation.y = -0.4; g.add(book);
+      add(book, new THREE.BoxGeometry(0.4, 0.06, 0.3), lam(0x8E7CF0));
+      add(book, new THREE.BoxGeometry(0.36, 0.03, 0.27), lam(0xFFFFFF), 0, 0.045, 0);
+      return t => { gem.rotation.y = t * 0.3; orbit.rotation.y = -t * 0.25; };
+    },
+
+    robotHut(g, accent) {                  // agents: a tiny hut with a friendly robot
+      const hx = -0.3, hz = -0.2, hy = surfaceY(hx, hz) - 0.05;
+      add(g, new THREE.BoxGeometry(0.82, 0.6, 0.72), lam(0xFFF4EC), hx, hy + 0.3, hz);
+      const roof = add(g, new THREE.ConeGeometry(0.7, 0.48, 4), lam(accent), hx, hy + 0.84, hz); roof.rotation.y = Math.PI / 4;
+      add(g, new THREE.BoxGeometry(0.22, 0.34, 0.03), lam(0x8E7CC9), hx, hy + 0.17, hz + 0.37);
+      add(g, new THREE.BoxGeometry(0.16, 0.14, 0.03), lam(0xBFE6FF), hx + 0.24, hy + 0.38, hz + 0.37);
+      const robot = new THREE.Group();
+      const rx = 0.55, rz = 0.4, ry = surfaceY(rx, rz) - 0.02;
+      robot.position.set(rx, ry, rz); g.add(robot);
+      add(robot, new THREE.BoxGeometry(0.11, 0.1, 0.14), lam(0x9AA6C8), -0.09, 0.05, 0);
+      add(robot, new THREE.BoxGeometry(0.11, 0.1, 0.14), lam(0x9AA6C8), 0.09, 0.05, 0);
+      add(robot, new THREE.BoxGeometry(0.34, 0.3, 0.26), lam(0xCFD8EE), 0, 0.25, 0);
+      add(robot, new THREE.BoxGeometry(0.12, 0.08, 0.02), lam(accent), 0, 0.27, 0.14);
+      add(robot, new THREE.BoxGeometry(0.4, 0.3, 0.3), lam(0xE6ECF8), 0, 0.56, 0);
+      add(robot, new THREE.SphereGeometry(0.045, 8, 6), lam(0x3B3F5C), -0.08, 0.58, 0.16);
+      add(robot, new THREE.SphereGeometry(0.045, 8, 6), lam(0x3B3F5C), 0.08, 0.58, 0.16);
+      add(robot, new THREE.CylinderGeometry(0.015, 0.015, 0.16, 6), lam(0x9AA6C8), 0, 0.79, 0);
+      add(robot, new THREE.SphereGeometry(0.05, 8, 6), lam(0xFF9AA2), 0, 0.88, 0);
+      return t => { robot.rotation.y = Math.sin(t * 0.4) * 0.35; robot.position.y = ry + Math.sin(t * 0.6) * 0.02; };
+    },
+
+    rocket(g, accent) {                    // next wave: a little rocket on a launch pad
+      const y0 = surfaceY(0, 0) - 0.04;
+      add(g, new THREE.CylinderGeometry(0.5, 0.56, 0.09, 10), lam(0xE6E2F2), 0, y0 + 0.045, 0);
+      const rocket = new THREE.Group(); rocket.position.set(0, y0 + 0.1, 0); g.add(rocket);
+      add(rocket, new THREE.CylinderGeometry(0.24, 0.28, 0.95, 12), lam(0xFFFFFF), 0, 0.55, 0);
+      add(rocket, new THREE.ConeGeometry(0.24, 0.42, 12), lam(accent), 0, 1.235, 0);
+      const win = add(rocket, new THREE.SphereGeometry(0.09, 10, 8), lam(0x9CCBF5, { emissive: 0x1D3550 }), 0, 0.72, 0.24); win.scale.z = 0.5;
+      add(rocket, new THREE.TorusGeometry(0.1, 0.022, 6, 14), lam(accent), 0, 0.72, 0.25);
+      for (let k = 0; k < 3; k++) {
+        const a = (k / 3) * Math.PI * 2 + Math.PI / 6;
+        const fin = add(rocket, new THREE.BoxGeometry(0.06, 0.32, 0.26), lam(accent), Math.sin(a) * 0.3, 0.2, Math.cos(a) * 0.3);
+        fin.rotation.y = a;
+      }
+      const ry = rocket.position.y;
+      return t => { rocket.position.y = ry + Math.sin(t * 0.7) * 0.04; };
+    }
+  };
+
+  const RING = 8.5;
+  const Y_OFFSETS = [0, 0.6, -0.3, 0.5, -0.4, 0.3];
+  const islands = [];
+  const hitMeshes = [];
+
+  A.islands.forEach((data, i) => {
+    const angle = Math.PI / 2 + (i / A.islands.length) * Math.PI * 2;   // Island A faces the camera
+    const root = new THREE.Group();
+    root.position.set(Math.cos(angle) * RING, Y_OFFSETS[i % Y_OFFSETS.length], Math.sin(angle) * RING);
+    const facing = Math.atan2(root.position.x, root.position.z);        // local +Z points outward
+    root.rotation.y = facing;
+    scene.add(root);
+
+    const body = new THREE.Group(); root.add(body);
+    const grassMat = lam(data.color, { emissive: 0xFFFFFF, emissiveIntensity: 0 });
+    const cap = add(body, new THREE.SphereGeometry(R, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), grassMat);
+    cap.scale.y = 0.35;
+    const bottom = add(body, new THREE.SphereGeometry(R * 0.96, 16, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), SOIL);
+    bottom.scale.y = 0.85;
+    const drip = add(body, new THREE.ConeGeometry(0.32, 0.7, 6), SOIL_DARK, 0, -1.55, 0);
+    drip.rotation.x = Math.PI;
+    const pebble = add(body, new THREE.DodecahedronGeometry(0.2, 0), SOIL_DARK, 1.9, -0.9, -0.4);
+
+    // Island F gets a planet-style ring
+    if (data.landmark === "rocket") {
+      const ring = add(body, new THREE.TorusGeometry(2.35, 0.05, 6, 48), lam(0xFFFFFF), 0, -0.25, 0);
+      ring.rotation.x = Math.PI / 2 - 0.25;
+    }
+
+    // Trees and flowers around the back and sides (the front stays clear for the landmark)
+    [[1.95, 1.15, 1], [3.1, 1.2, 0.9], [4.35, 1.1, 1.1]].forEach(([a, r, s], k) =>
+      tree(body, Math.sin(a + i * 0.3) * r, Math.cos(a + i * 0.3) * r, s, k + i));
+    [[0.9, 1.25], [-0.95, 1.2], [1.25, 0.6]].forEach(([x, z], k) =>
+      flower(body, x, z, [0xFFFFFF, data.accent, 0xFFE59A][k]));
+
+    const anim = (LANDMARKS[data.landmark] || (() => null))(body, new THREE.Color(data.accent).getHex()) || (() => {});
+
+    // Soft glow halo for hover / focus (fades in and out slowly)
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowTex, color: data.color, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending
+    }));
+    glow.scale.set(7, 7, 1); glow.position.y = 0.3;
+    root.add(glow);
+
+    // Invisible, generous hit area for clicking and tapping
+    const hit = new THREE.Mesh(new THREE.SphereGeometry(2.4, 12, 8), new THREE.MeshBasicMaterial());
+    hit.visible = false; hit.position.y = 0.3; hit.userData.index = i;
+    root.add(hit); hitMeshes.push(hit);
+
+    islands.push({ root, body, glow, grassMat, pebble, anim, facing, baseY: root.position.y, phase: i * 1.1, hotPrev: false });
+  });
+
+  /* ---------------- Controls: drag to rotate, scroll / pinch to zoom ---------------- */
+  const controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.07;
+  controls.enablePan = false;
+  controls.minDistance = 5;
+  controls.maxDistance = 40;
+  controls.minPolarAngle = 0.25;
+  controls.maxPolarAngle = 1.38;         // can't go under the islands
+  controls.rotateSpeed = 0.6;
+  controls.zoomSpeed = 0.7;
+  controls.addEventListener("start", () => A.hideHint());
+
+  const overviewPos = () => {
+    const a = camera.aspect, f = a < 0.75 ? 1.55 : a < 1.15 ? 1.22 : 1;  // step back on narrow screens
+    return new THREE.Vector3(0, 10 * f, 21 * f);
+  };
+  const overviewTarget = new THREE.Vector3(0, 0.3, 0);
+
+  /* ---------------- Camera fly-to (eased) ---------------- */
+  let tween = null;
+  let low = A.lowStim;
+  function flyTo(pos, target, dur = 1500) {
+    if (low || dur === 0) {             // low-stimulation: jump instantly
+      tween = null;
+      camera.position.copy(pos); controls.target.copy(target); controls.update();
+      controls.enabled = true;
+      return;
+    }
+    tween = { p0: camera.position.clone(), t0: controls.target.clone(), p1: pos.clone(), t1: target.clone(), start: performance.now(), dur };
+    controls.enabled = false;
+  }
+  const easeInOut = k => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
+
+  function islandView(i) {
+    const p = islands[i].root.position;
+    const out = new THREE.Vector3(p.x, 0, p.z).normalize();
+    const target = new THREE.Vector3(p.x, islands[i].baseY + 0.6, p.z);
+    const pos = target.clone().addScaledVector(out, 7.2).add(new THREE.Vector3(0, 2.8, 0));
+    return { pos, target };
+  }
+
+  /* ---------------- Keep the open island visible beside the panel ----------------
+     setViewOffset shifts the picture so the island sits in the free area
+     (left of the side panel, or above the bottom sheet on phones). */
+  const inset = { x: 0, y: 0 }, insetTarget = { x: 0, y: 0 };
+  const panelEl = document.getElementById("panel"), topbar = document.getElementById("topbar");
+  const sheetQuery = window.matchMedia("(max-width: 720px)");
+  function computeInset() {
+    if (!A.panelOpen) return { x: 0, y: 0 };
+    if (sheetQuery.matches) {
+      const hdr = topbar.getBoundingClientRect().bottom;
+      return { x: 0, y: Math.max(0, (panelEl.offsetHeight - hdr) / 2) };
+    }
+    return { x: (panelEl.offsetWidth + 24) / 2, y: 0 };
+  }
+  function applyInset(force) {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    if (Math.abs(inset.x) < 0.5 && Math.abs(inset.y) < 0.5 && insetTarget.x === 0 && insetTarget.y === 0) {
+      if (camera.view && camera.view.enabled) camera.clearViewOffset();
+      else if (force) camera.updateProjectionMatrix();
+    } else {
+      camera.setViewOffset(w, h, inset.x, inset.y, w, h);
+    }
+  }
+
+  /* ---------------- Hover, focus and selection highlights ---------------- */
+  let hoverIdx = -1;
+  const labelHot = new Set();
+  const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2();
+  let hoverDirty = false;
+  function setNdc(e) {
+    const r = canvas.getBoundingClientRect();
+    ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  }
+  function pick() {
+    raycaster.setFromCamera(ndc, camera);
+    const hit = raycaster.intersectObjects(hitMeshes, false)[0];
+    return hit ? hit.object.userData.index : -1;
+  }
+  canvas.addEventListener("pointermove", e => { if (e.pointerType === "mouse") { setNdc(e); hoverDirty = true; } });
+  canvas.addEventListener("pointerleave", () => { hoverIdx = -1; canvas.style.cursor = ""; });
+
+  // Click / tap detection that ignores drags and pinches
+  const activePointers = new Set();
+  let down = null;
+  canvas.addEventListener("pointerdown", e => {
+    activePointers.add(e.pointerId);
+    down = activePointers.size === 1 ? { x: e.clientX, y: e.clientY, t: performance.now() } : null;
+    A.hideHint();
+  });
+  const endPointer = e => {
+    activePointers.delete(e.pointerId);
+    if (!down || e.type !== "pointerup") { down = null; return; }
+    const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y), quick = performance.now() - down.t < 700;
+    down = null;
+    if (moved < 7 && quick) { setNdc(e); const i = pick(); if (i >= 0) A.openIsland(i); }
+  };
+  canvas.addEventListener("pointerup", endPointer);
+  canvas.addEventListener("pointercancel", endPointer);
+
+  /* ---------------- Low-stimulation mode ---------------- */
+  function setLowStim(on) {
+    low = on;
+    controls.enableDamping = !on;
+    sky.visible = stars.visible = clouds.visible = motes.visible = sea.visible = !on;
+    scene.background = on ? new THREE.Color(SKY.flat) : null;
+    scene.fog.color.set(on ? SKY.flat : SKY.fog);
+    islands.forEach(o => {                // settle everything into a calm, still pose
+      o.root.position.y = o.baseY;
+      o.root.rotation.y = o.facing;
+      o.glow.material.opacity = 0;
+    });
+    if (on && tween) { const t = tween; tween = null; flyTo(t.p1, t.t1, 0); }
+  }
+
+  /* ---------------- Public API used by Part 1 ---------------- */
+  A.scene = {
+    flyToIsland(i) { const v = islandView(i); flyTo(v.pos, v.target, 1500); },
+    flyToOverview() { flyTo(overviewPos(), overviewTarget, 1300); },
+    refreshInset() { const t = computeInset(); insetTarget.x = t.x; insetTarget.y = t.y; },
+    setLowStim,
+    setLabelHot(i, on) { if (on) labelHot.add(i); else labelHot.delete(i); }
+  };
+
+  /* ---------------- Resize ---------------- */
+  function onResize() {
+    const w = window.innerWidth, h = window.innerHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    A.scene.refreshInset();
+    inset.x = insetTarget.x; inset.y = insetTarget.y;
+    applyInset(true);
+  }
+  window.addEventListener("resize", onResize);
+
+  /* ---------------- Start: gentle fly-in from afar ---------------- */
+  setLowStim(low);
+  camera.position.copy(overviewPos()).multiplyScalar(1.5);
+  controls.target.copy(overviewTarget);
+  controls.update();
+  flyTo(overviewPos(), overviewTarget, 2200);
+
+  /* ---------------- Render loop ---------------- */
+  const clock = new THREE.Clock();
+  let t = 0;                                  // motion time (frozen in low-stimulation mode)
+  const labelPos = new THREE.Vector3();
+
+  function updateLabels() {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    islands.forEach((o, i) => {
+      const lab = A.labels[i];
+      labelPos.copy(o.root.position); labelPos.y += 2.75;
+      const dist = camera.position.distanceTo(labelPos);
+      labelPos.project(camera);
+      const off = labelPos.z > 1 || Math.abs(labelPos.x) > 1.15 || Math.abs(labelPos.y) > 1.15;
+      lab.classList.toggle("offscreen", off);
+      if (off) return;
+      const x = (labelPos.x * 0.5 + 0.5) * w, y = (-labelPos.y * 0.5 + 0.5) * h;
+      lab.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) translate(-50%, -100%)`;
+      lab.style.zIndex = String(200 - Math.round(dist));
+    });
+  }
+
+  function frame() {
+    requestAnimationFrame(frame);
+    const dt = Math.min(clock.getDelta(), 0.05);
+    if (!low) t += dt;
+
+    // Camera tween
+    if (tween) {
+      const k = Math.min(1, (performance.now() - tween.start) / tween.dur), e = easeInOut(k);
+      camera.position.lerpVectors(tween.p0, tween.p1, e);
+      camera.position.y += Math.sin(Math.PI * e) * 1.2;          // a gentle arc, not a straight line
+      controls.target.lerpVectors(tween.t0, tween.t1, e);
+      camera.lookAt(controls.target);
+      if (k >= 1) { tween = null; controls.enabled = true; controls.update(); }
+    } else {
+      controls.update();
+    }
+
+    // Panel inset (eased, or instant in low-stimulation mode)
+    const ki = low ? 1 : Math.min(1, dt * 5);
+    const changed = Math.abs(insetTarget.x - inset.x) > 0.3 || Math.abs(insetTarget.y - inset.y) > 0.3;
+    inset.x += (insetTarget.x - inset.x) * ki; inset.y += (insetTarget.y - inset.y) * ki;
+    if (changed) applyInset(false);
+
+    // Hover picking (mouse only)
+    if (hoverDirty && !tween) {
+      hoverDirty = false;
+      hoverIdx = pick();
+      canvas.style.cursor = hoverIdx >= 0 ? "pointer" : "";
+    }
+
+    // Islands: bobbing, landmark animation, highlights
+    islands.forEach((o, i) => {
+      const hot = hoverIdx === i || labelHot.has(i);
+      const sel = A.current === i;
+      if (hot !== o.hotPrev) { A.labels[i].classList.toggle("hot", hot); o.hotPrev = hot; }
+
+      const glowTarget = low ? 0 : hot ? 0.55 : sel ? 0.3 : 0;
+      o.glow.material.opacity += (glowTarget - o.glow.material.opacity) * Math.min(1, dt * 3);
+      const sTarget = hot ? 1.06 : 1;
+      o.body.scale.setScalar(low ? sTarget : o.body.scale.x + (sTarget - o.body.scale.x) * Math.min(1, dt * 5));
+      const eTarget = hot ? 0.1 : 0;
+      o.grassMat.emissiveIntensity = low ? eTarget : o.grassMat.emissiveIntensity + (eTarget - o.grassMat.emissiveIntensity) * Math.min(1, dt * 5);
+
+      if (!low) {
+        o.root.position.y = o.baseY + Math.sin(t * 0.55 + o.phase) * 0.14;
+        o.root.rotation.y = o.facing + Math.sin(t * 0.18 + o.phase) * 0.08;
+        o.pebble.position.y = -0.9 + Math.sin(t * 0.7 + o.phase) * 0.08;
+        o.anim(t);
+      }
+    });
+
+    // Ambient drift
+    if (!low) {
+      clouds.rotation.y += dt * 0.008;
+      stars.rotation.y += dt * 0.002;
+      const p = moteGeo.attributes.position;
+      for (let m = 0; m < MOTES; m++) {
+        let y = p.getY(m) + dt * 0.12;
+        if (y > 7) y = -4;
+        p.setY(m, y);
+      }
+      p.needsUpdate = true;
+    }
+
+    renderer.render(scene, camera);
+    updateLabels();
+  }
+
+  frame();
+  A.onSceneReady();
+}
+
+main();
+</script>
+</body>
+</html>
