@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YOLO26 Live • Ultralytics ONNX Web</title>
+
+<!-- ONNX Runtime Web 1.21 (local copy with CDN fallback for GitHub Pages) -->
+<script src="./static/ort/ort.all.min.js"></script>
+<script>
+  if (typeof ort === 'undefined') {
+    document.write('<script src="/ort/ort.all.min.js"><\/script>');
+    document.write('<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.all.min.js"><\/script>');
+  }
+</script>
+
+<style>
+  :root {
+    --bg: #090e1a; --panel: #111827; --panel-2: #1e293b; --line: #2d3748;
+    --text: #f1f5f9; --muted: #94a3b8; --accent: #60a5fa; --accent-2: #f472b6;
+    --ok: #34d399; --warn: #fbbf24; --err: #f87171;
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  [hidden] { display: none !important; }
+  html, body { background: var(--bg); color: var(--text); font: 14px/1.45 var(--font); min-height: 100vh; }
+  header {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px;
+    padding: 12px 20px; border-bottom: 1px solid var(--line); background: rgba(17, 24, 39, 0.95);
+    position: sticky; top: 0; z-index: 30; backdrop-filter: blur(10px);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .logo {
+    width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, #3b82f6, #ec4899);
+    display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; color: #fff;
+  }
+  h1 { font-size: 1.1rem; line-height: 1.2; }
+  h1 small { display: block; font-size: .75rem; font-weight: 500; color: var(--muted); }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+  .controls label { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--muted); }
+  select, button {
+    font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 8px; padding: 5px 9px;
+  }
+  select:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button { cursor: pointer; transition: all 0.15s ease; }
+  button:hover, select:hover { border-color: var(--accent); }
+  input[type=range] { width: 90px; accent-color: var(--accent-2); cursor: pointer; }
+  input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+  output { font-family: var(--mono); color: var(--text); min-width: 3.2em; font-size: .82rem; }
+  .check { color: var(--text) !important; cursor: pointer; }
+
+  #errors { display: grid; gap: 8px; padding: 0 20px; margin-top: 10px; max-width: 1280px; margin-left: auto; margin-right: auto; }
+  .msg { display: flex; gap: 12px; align-items: flex-start; padding: 10px 14px; border-radius: 10px; border: 1px solid; }
+  .msg.error { background: #3a1f26; border-color: #7a3340; color: #ffd5d5; }
+  .msg.info { background: #1e293b; border-color: #3b82f6; color: #bae6fd; }
+  .msg strong { display: block; margin-bottom: 2px; }
+  .msg button { margin-left: auto; flex: none; padding: 2px 10px; background: transparent; color: inherit; border-color: currentColor; }
+
+  main { padding: 12px 20px 24px; max-width: 1280px; margin: 0 auto; }
+  .stage {
+    position: relative; background: #000; border-radius: 16px; overflow: hidden;
+    border: 1px solid var(--line); aspect-ratio: 16/9; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  }
+  #view { display: block; width: 100%; height: 100%; object-fit: contain; }
+  #video { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+  .hud { position: absolute; top: 12px; left: 12px; display: flex; flex-wrap: wrap; gap: 6px; pointer-events: none; z-index: 10; }
+  .hud span {
+    padding: 4px 10px; border-radius: 8px; background: rgba(9, 14, 26, 0.85);
+    border: 1px solid rgba(255,255,255,0.08); font: 600 .8rem var(--mono); backdrop-filter: blur(8px);
+  }
+  #hudTask { color: #fff; } #hudBackend { color: var(--accent); } #hudFps { color: var(--ok); }
+
+  .center { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 15; }
+  .card {
+    display: flex; align-items: center; gap: 14px; padding: 14px 22px; border-radius: 12px;
+    background: rgba(17, 24, 39, 0.92); border: 1px solid var(--line); pointer-events: auto;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.6);
+  }
+  .card span { display: block; font: .82rem var(--mono); color: var(--muted); margin-top: 3px; }
+  .spinner { width: 26px; height: 26px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent-2); animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .side {
+    position: absolute; top: 12px; right: 12px; width: min(290px, 45%); max-height: calc(100% - 24px); overflow: auto;
+    padding: 12px 14px; border-radius: 12px; background: rgba(17, 24, 39, 0.9);
+    border: 1px solid rgba(255,255,255,0.1); font-size: .86rem; z-index: 10; backdrop-filter: blur(12px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .side h2 { margin: 0 0 8px; font-size: .76rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .bar { margin-bottom: 7px; }
+  .bar .row { display: flex; justify-content: space-between; gap: 8px; font-size: .84rem; }
+  .bar .row b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar .row i { font-style: normal; font-family: var(--mono); color: var(--muted); }
+  .bar .track { height: 5px; border-radius: 3px; background: var(--panel-2); margin-top: 3px; overflow: hidden; }
+  .bar .fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width 0.15s ease; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; background: var(--panel-2); font-size: .8rem; }
+  .chip i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .gradient { height: 10px; border-radius: 5px; margin: 4px 0; }
+  .ends { display: flex; justify-content: space-between; color: var(--muted); font-size: .78rem; font-family: var(--mono); }
+
+  .note { margin: 10px 2px 0; color: var(--muted); font-size: .86rem; min-height: 1.4em; }
+  @media (max-width: 640px) {
+    header { padding: 10px 12px; }
+    main { padding: 10px 10px 20px; }
+    .stage { aspect-ratio: 4/3; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="logo">26</div>
+    <h1>YOLO26 Live <small>Ultralytics nano models • ONNX Runtime Web • 100% in-browser</small></h1>
+  </div>
+  <div class="controls">
+    <label>Task
+      <select id="task">
+        <option value="detect" selected>🎯 Detection (yolo26n)</option>
+        <option value="segment">🎨 Instance segmentation (yolo26n-seg)</option>
+        <option value="semantic">🗺️ Semantic segmentation (yolo26n-sem)</option>
+        <option value="depth">🌊 Depth estimation (yolo26n-depth)</option>
+        <option value="classify">🏷️ Classification (yolo26n-cls)</option>
+        <option value="pose">🤸 Pose estimation (yolo26n-pose)</option>
+        <option value="obb">📐 Oriented boxes / OBB (yolo26n-obb)</option>
+      </select>
+    </label>
+    <label class="check"><input type="checkbox" id="gpu"> ⚡ Use GPU (WebGPU)</label>
+    <label>Cadence
+      <select id="every">
+        <option value="1">every frame</option>
+        <option value="2" selected>every 2nd frame</option>
+        <option value="3">every 3rd frame</option>
+      </select>
+    </label>
+    <label>Confidence <input type="range" id="conf" min="0.05" max="0.9" step="0.01" value="0.30"><output id="confOut">0.30</output></label>
+    <label>Overlay <input type="range" id="opacity" min="0.1" max="1" step="0.05" value="0.55"><output id="opacityOut">55%</output></label>
+    <label class="check"><input type="checkbox" id="mirror" checked> Mirror</label>
+    <button id="restartCam" type="button">Restart camera</button>
+  </div>
+</header>
+
+<div id="errors" aria-live="assertive"></div>
+
+<main>
+  <div class="stage">
+    <video id="video" playsinline muted></video>
+    <canvas id="view" aria-label="Live webcam image with model results"></canvas>
+    <div class="hud" aria-live="polite">
+      <span id="hudTask">Task: –</span>
+      <span id="hudBackend">Backend: –</span>
+      <span id="hudFps">FPS: –</span>
+    </div>
+    <div class="center" id="camMsg"><div class="card"><div class="spinner"></div><div><strong>Starting camera…</strong><span>Allow camera access if your browser prompts.</span></div></div></div>
+    <div class="center" id="loading" hidden><div class="card" role="status"><div class="spinner"></div><div><strong>Loading model...</strong><span id="loadingDetail"></span></div></div></div>
+    <aside class="side" id="side" hidden></aside>
+  </div>
+  <p class="note" id="taskNote"></p>
+</main>
+
+<script>
+/* =====================================================================
+   YOLO26 Live: Ultralytics YOLO26 nano models running in the browser
+   Compatible with GitHub Pages and local servers.
+   ===================================================================== */
+'use strict';
+
+const INPUT = 320;
+const isLocal = typeof window !== 'undefined' && (
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1' ||
+  window.location.port === '8000'
+);
+
+const MODEL_DIR = isLocal ? '/models/' : './static/models/';
+const META_URL = isLocal ? '/models_meta.json' : './static/models_meta.json';
+const ORT_PATH = isLocal ? '/ort/' : './static/ort/';
+const IOU_THRESHOLD = 0.45;
+const MAX_DETECTIONS = 50;
+
+const TASKS = {
+  detect:   { label: 'Detection',             file: 'yolo26n.onnx',       meta: 'detect' },
+  segment:  { label: 'Instance segmentation', file: 'yolo26n-seg.onnx',   meta: 'segment' },
+  semantic: { label: 'Semantic segmentation', file: 'yolo26n-sem.onnx',   meta: 'semantic',
+              note: 'Trained on street scenes (Cityscapes); works best on streets/outdoors.' },
+  depth:    { label: 'Depth estimation',      file: 'yolo26n-depth.onnx', meta: 'depth',
+              note: 'Warm colors are near and dark purple is far. Range is in meters.' },
+  classify: { label: 'Classification',        file: 'yolo26n-cls.onnx',   meta: 'classify',
+              note: 'Classifies the center focus region into 1000 ImageNet categories.' },
+  pose:     { label: 'Pose estimation',       file: 'yolo26n-pose.onnx',  meta: 'pose' },
+  obb:      { label: 'Oriented boxes (OBB)',  file: 'yolo26n-obb.onnx',   meta: 'obb',
+              note: 'Detects rotated boxes (DOTA: vehicles, ships, planes, fields). Hold an object at an angle.' }
+};
+
+const PALETTE = ['#ff6b8b', '#4dabf7', '#51cf66', '#ffd43b', '#cc5de8', '#ff922b', '#22b8cf', '#f06595',
+                 '#94d82d', '#845ef7', '#fcc419', '#20c997', '#ff8787', '#74c0fc', '#e599f7', '#ffa94d'];
+const CITYSCAPES_COLORS = [[128,64,128],[244,35,232],[70,70,70],[102,102,156],[190,153,153],[153,153,153],[250,170,30],
+  [220,220,0],[107,142,35],[152,251,152],[70,130,180],[220,20,60],[255,0,0],[0,0,142],[0,0,70],[0,60,100],[0,80,100],[0,0,230],[119,11,32]];
+const SKELETON = [[15,13],[13,11],[16,14],[14,12],[11,12],[5,11],[6,12],[5,6],[5,7],[6,8],[7,9],[8,10],[1,2],[0,1],[0,2],[1,3],[2,4],[3,5],[4,6]];
+const LIMB_COLORS = { head: '#ffd43b', arm: '#4dabf7', body: '#ff6b8b', leg: '#51cf66' };
+const limbColor = (a, b) => (a <= 4 && b <= 6 && Math.min(a, b) <= 4) ? LIMB_COLORS.head
+  : (a >= 11 || b >= 11) ? (a >= 13 || b >= 13 ? LIMB_COLORS.leg : LIMB_COLORS.body)
+  : (a >= 7 || b >= 7) ? LIMB_COLORS.arm : LIMB_COLORS.body;
+const DEPTH_STOPS = [[240,249,33],[248,149,64],[204,71,120],[126,3,168],[13,8,135]];
+
+const $ = id => document.getElementById(id);
+const video = $('video'), canvas = $('view'), ctx = canvas.getContext('2d');
+const ui = {
+  task: $('task'), gpu: $('gpu'), every: $('every'), conf: $('conf'), confOut: $('confOut'),
+  opacity: $('opacity'), opacityOut: $('opacityOut'), mirror: $('mirror'), restartCam: $('restartCam'),
+  errors: $('errors'), hudTask: $('hudTask'), hudBackend: $('hudBackend'), hudFps: $('hudFps'),
+  camMsg: $('camMsg'), loading: $('loading'), loadingDetail: $('loadingDetail'), side: $('side'), taskNote: $('taskNote')
+};
+
+const state = {
+  task: ui.task.value,
+  backend: 'wasm',
+  every: +ui.every.value,
+  conf: +ui.conf.value,
+  opacity: +ui.opacity.value,
+  mirror: ui.mirror.checked,
+  sessions: new Map(),
+  loading: new Map(),
+  progress: new Map(),
+  failed: new Set(),
+  busy: false,
+  result: null,
+  frame: 0,
+  meta: {},
+  cameraReady: false
+};
+const stats = { frames: 0, infers: 0, lastMs: 0, t0: performance.now(), fps: 0, ifps: 0 };
+
+function showMessage(key, title, detail, kind = 'error') {
+  let el = ui.errors.querySelector(`[data-key="${key}"]`);
+  if (!el) {
+    el = document.createElement('div');
+    el.dataset.key = key;
+    ui.errors.appendChild(el);
+  }
+  el.className = `msg ${kind}`;
+  el.innerHTML = `<div><strong></strong><span></span></div><button type="button" aria-label="Dismiss">Dismiss</button>`;
+  el.querySelector('strong').textContent = title;
+  el.querySelector('span').textContent = detail || '';
+  el.querySelector('button').onclick = () => el.remove();
+}
+function clearMessage(key) { const el = ui.errors.querySelector(`[data-key="${key}"]`); if (el) el.remove(); }
+
+function checkSupport() {
+  if (window.location.protocol === 'file:') {
+    showMessage('file_protocol', 'Bitte lokalen Server nutzen (Browser-Sicherheit)',
+      'Du hast die HTML-Datei per Doppelklick über den Finder (file://) geöffnet. Webbrowser verbieten aus Sicherheitsgründen (CORS) das Nachladen lokaler Modelldateien über das file://-Protokoll. Bitte starte im Terminal "python3 serve_yolo.py" und öffne http://localhost:8000/yolo_live.html – oder rufe die Datei nach dem Push auf GitHub Pages (https://) auf.');
+    return false;
+  }
+  const missing = [];
+  if (typeof WebAssembly !== 'object') missing.push('WebAssembly');
+  if (typeof ort === 'undefined') missing.push('ONNX Runtime Web');
+  if (!window.isSecureContext) missing.push('a secure context (use https:// or http://localhost)');
+  else if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) missing.push('webcam access (getUserMedia)');
+  if (missing.length) {
+    showMessage('support', 'Browser cannot run the app', `Missing: ${missing.join('; ')}.`);
+    return false;
+  }
+  return true;
+}
+
+let wasmThreads = 1;
+function setupOrt() {
+  ort.env.wasm.wasmPaths = ORT_PATH;
+  wasmThreads = self.crossOriginIsolated ? Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1)) : 1;
+  ort.env.wasm.numThreads = wasmThreads;
+}
+
+let resolvedModelDir = null;
+
+async function fetchModel(fileName, onProgress) {
+  const candidates = resolvedModelDir
+    ? [resolvedModelDir, '/models/', './models/', '../models/', './static/models/', '/static/models/']
+    : ['/models/', './models/', '../models/', './static/models/', '/static/models/'];
+
+  const uniquePrefixes = [...new Set(candidates)];
+  let res = null;
+
+  for (const prefix of uniquePrefixes) {
+    const url = prefix + fileName;
+    try {
+      const r = await fetch(url);
+      if (r.ok) {
+        res = r;
+        resolvedModelDir = prefix;
+        break;
+      }
+    } catch (_) {}
+  }
+
+  if (!res) {
+    throw new Error(`File ${fileName} not found. Looked in: ${uniquePrefixes.map(p => p + fileName).join(', ')}`);
+  }
+
+  const total = +res.headers.get('Content-Length') || 0;
+  if (!res.body || !total) return new Uint8Array(await res.arrayBuffer());
+  const reader = res.body.getReader(), chunks = [];
+  let got = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value); got += value.length;
+    onProgress(Math.min(1, got / total));
+  }
+  const bytes = new Uint8Array(got);
+  let off = 0;
+  for (const c of chunks) { bytes.set(c, off); off += c.length; }
+  return bytes;
+}
+
+function getSession(task, backend) {
+  const key = `${task}|${backend}`;
+  if (state.sessions.has(key)) return Promise.resolve(state.sessions.get(key));
+  if (state.loading.has(key)) return state.loading.get(key);
+  const p = (async () => {
+    state.progress.set(key, 0);
+    updateLoading();
+    try {
+      if (backend === 'webgpu' && !navigator.gpu) throw new Error('WebGPU not supported.');
+      const bytes = await fetchModel(TASKS[task].file, f => { state.progress.set(key, f); updateLoading(); });
+      state.progress.set(key, 1); updateLoading();
+      const session = await ort.InferenceSession.create(bytes, {
+        executionProviders: [backend],
+        graphOptimizationLevel: 'all'
+      });
+      state.sessions.set(key, session);
+      return session;
+    } finally {
+      state.loading.delete(key);
+      state.progress.delete(key);
+      updateLoading();
+    }
+  })();
+  state.loading.set(key, p);
+  return p;
+}
+
+async function ensureSession() {
+  const task = state.task, backend = state.backend;
+  if (state.failed.has(task) && backend === 'wasm') return null;
+  try {
+    await getSession(task, backend);
+    clearMessage('model');
+  } catch (err) {
+    if (backend === 'webgpu') { fallbackToWasm(err); return null; }
+    state.failed.add(task);
+    showMessage('model', `Failed to load ${TASKS[task].label}`, `${err.message || err}`);
+  }
+  return null;
+}
+
+function fallbackToWasm(err) {
+  if (state.backend !== 'webgpu') return;
+  state.backend = 'wasm';
+  ui.gpu.checked = false;
+  showMessage('gpu', 'WebGPU unavailable, switched to WASM (CPU)', `${(err && err.message) || err}`.slice(0, 200), 'info');
+  state.result = null;
+  updateHud();
+  ensureSession();
+}
+
+function updateLoading() {
+  const key = `${state.task}|${state.backend}`;
+  const loading = state.loading.has(key);
+  ui.loading.hidden = !loading || !state.cameraReady;
+  if (loading) {
+    const p = state.progress.get(key) || 0;
+    ui.loadingDetail.textContent = p >= 1
+      ? `${TASKS[state.task].file}: preparing ${state.backend} session…`
+      : `${TASKS[state.task].file}: ${Math.round(p * 100)}%`;
+  }
+}
+
+async function startCamera() {
+  clearMessage('camera');
+  ui.camMsg.hidden = false;
+  if (video.srcObject) video.srcObject.getTracks().forEach(t => t.stop());
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }, audio: false
+    });
+    video.srcObject = stream;
+    await video.play();
+    state.cameraReady = true;
+    ui.camMsg.hidden = true;
+    updateLoading();
+    stream.getVideoTracks()[0].addEventListener('ended', () => {
+      state.cameraReady = false;
+      showMessage('camera', 'Camera stopped', 'Press Restart camera.');
+    });
+  } catch (err) {
+    state.cameraReady = false;
+    ui.camMsg.hidden = true;
+    const n = err && err.name;
+    if (n === 'NotAllowedError' || n === 'PermissionDeniedError' || n === 'SecurityError') {
+      showMessage('camera', 'Camera access denied', 'Allow camera in your browser settings, then press Restart camera.');
+    } else if (n === 'NotFoundError' || n === 'DevicesNotFoundError') {
+      showMessage('camera', 'No camera found', 'Connect a camera and press Restart camera.');
+    } else {
+      showMessage('camera', 'Camera error', `${err && err.message ? err.message : err}`);
+    }
+  }
+}
+
+const prep = document.createElement('canvas');
+prep.width = prep.height = INPUT;
+const pctx = prep.getContext('2d', { willReadFrequently: true });
+pctx.imageSmoothingQuality = 'high';
+const inputData = new Float32Array(3 * INPUT * INPUT);
+
+function preprocess(task) {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  let lb;
+  pctx.fillStyle = 'rgb(114,114,114)';
+  pctx.fillRect(0, 0, INPUT, INPUT);
+  if (task === 'classify') {
+    const s = Math.min(vw, vh);
+    const cropX = Math.round((vw - s) / 2), cropY = Math.round((vh - s) / 2);
+    pctx.drawImage(video, cropX, cropY, s, s, 0, 0, INPUT, INPUT);
+    lb = { scale: INPUT / s, padX: 0, padY: 0, w: INPUT, h: INPUT, cropX, cropY, cropSize: s };
+  } else {
+    const scale = Math.min(INPUT / vw, INPUT / vh);
+    const w = Math.round(vw * scale), h = Math.round(vh * scale);
+    const padX = Math.floor((INPUT - w) / 2), padY = Math.floor((INPUT - h) / 2);
+    pctx.drawImage(video, padX, padY, w, h);
+    lb = { scale, padX, padY, w, h };
+  }
+  const px = pctx.getImageData(0, 0, INPUT, INPUT).data, A = INPUT * INPUT;
+  for (let i = 0, j = 0; j < A; i += 4, j++) {
+    inputData[j] = px[i] / 255;
+    inputData[A + j] = px[i + 1] / 255;
+    inputData[2 * A + j] = px[i + 2] / 255;
+  }
+  return { tensor: new ort.Tensor('float32', inputData, [1, 3, INPUT, INPUT]), lb };
+}
+const toVideo = (x, y, lb) => [(x - lb.padX) / lb.scale, (y - lb.padY) / lb.scale];
+
+function iou(a, b) {
+  const w = Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1), h = Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1);
+  if (w <= 0 || h <= 0) return 0;
+  const inter = w * h;
+  return inter / ((a.x2 - a.x1) * (a.y2 - a.y1) + (b.x2 - b.x1) * (b.y2 - b.y1) - inter);
+}
+function nms(cands) {
+  cands.sort((a, b) => b.score - a.score);
+  const keep = [];
+  for (const c of cands) {
+    if (keep.length >= MAX_DETECTIONS) break;
+    if (keep.every(k => k.cls !== c.cls || iou(k, c) < IOU_THRESHOLD)) keep.push(c);
+  }
+  return keep;
+}
+function rawCandidates(t, clsStart, nCls) {
+  const d = t.data, N = t.dims[2], out = [];
+  for (let a = 0; a < N; a++) {
+    let best = 0, bc = 0;
+    for (let c = 0; c < nCls; c++) { const v = d[(clsStart + c) * N + a]; if (v > best) { best = v; bc = c; } }
+    if (best < state.conf) continue;
+    const cx = d[a], cy = d[N + a], w = d[2 * N + a], h = d[3 * N + a];
+    out.push({ a, cls: bc, score: best, cx, cy, w, h, x1: cx - w / 2, y1: cy - h / 2, x2: cx + w / 2, y2: cy + h / 2 });
+  }
+  return nms(out);
+}
+const nameOf = (metaKey, id) => (state.meta[metaKey] && state.meta[metaKey].names && state.meta[metaKey].names[id]) || `class ${id}`;
+const colorOf = id => PALETTE[id % PALETTE.length];
+function videoBox(b, lb) {
+  const [x1, y1] = toVideo(b.x1, b.y1, lb), [x2, y2] = toVideo(b.x2, b.y2, lb);
+  return { x1, y1, x2, y2 };
+}
+
+function makeCanvas(size) { const c = document.createElement('canvas'); c.width = c.height = size; return c; }
+const SEG_RES = 160;
+const segCanvas = makeCanvas(SEG_RES), segCtx = segCanvas.getContext('2d'), segImg = segCtx.createImageData(SEG_RES, SEG_RES);
+const mapCanvas = makeCanvas(INPUT), mapCtx = mapCanvas.getContext('2d'), mapImg = mapCtx.createImageData(INPUT, INPUT);
+const hexRgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+
+const DEPTH_LUT = (() => {
+  const lut = new Uint8Array(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    const f = (i / 255) * (DEPTH_STOPS.length - 1), k = Math.min(DEPTH_STOPS.length - 2, Math.floor(f)), t = f - k;
+    for (let c = 0; c < 3; c++) lut[i * 3 + c] = Math.round(DEPTH_STOPS[k][c] * (1 - t) + DEPTH_STOPS[k + 1][c] * t);
+  }
+  return lut;
+})();
+
+const DECODE = {
+  detect(out, s, lb) {
+    const t = out[s.outputNames[0]], d = t.data, n = t.dims[1], stride = t.dims[2];
+    const boxes = [];
+    for (let i = 0; i < n; i++) {
+      const o = i * stride, score = d[o + 4];
+      if (score < state.conf) continue;
+      const cls = Math.round(d[o + 5]);
+      boxes.push({ ...videoBox({ x1: d[o], y1: d[o + 1], x2: d[o + 2], y2: d[o + 3] }, lb), score, cls, label: nameOf('detect', cls) });
+    }
+    return { boxes };
+  },
+
+  segment(out, s, lb) {
+    const t = out[s.outputNames[0]], protos = out[s.outputNames[1]];
+    const nCls = t.dims[1] - 4 - protos.dims[1];
+    const dets = rawCandidates(t, 4, nCls);
+    const d = t.data, N = t.dims[2], nm = protos.dims[1], mh = protos.dims[2], mw = protos.dims[3], P = protos.data;
+    const px = segImg.data;
+    px.fill(0);
+    const logits = new Float32Array(mh * mw);
+    for (let k = dets.length - 1; k >= 0; k--) {
+      const det = dets[k];
+      logits.fill(0);
+      for (let c = 0; c < nm; c++) {
+        const coef = d[(4 + nCls + c) * N + det.a], base = c * mh * mw;
+        for (let p = 0; p < mh * mw; p++) logits[p] += coef * P[base + p];
+      }
+      const [r, g, b] = hexRgb(colorOf(det.cls));
+      const f = SEG_RES / INPUT, sx = mw / SEG_RES, sy = mh / SEG_RES;
+      const x0 = Math.max(0, Math.floor(det.x1 * f)), x1 = Math.min(SEG_RES, Math.ceil(det.x2 * f));
+      const y0 = Math.max(0, Math.floor(det.y1 * f)), y1 = Math.min(SEG_RES, Math.ceil(det.y2 * f));
+      for (let y = y0; y < y1; y++) {
+        const fy = Math.max(0, Math.min(mh - 1.001, (y + 0.5) * sy - 0.5)), iy = fy | 0, ty = fy - iy;
+        for (let x = x0; x < x1; x++) {
+          const fx = Math.max(0, Math.min(mw - 1.001, (x + 0.5) * sx - 0.5)), ix = fx | 0, tx = fx - ix;
+          const i0 = iy * mw + ix;
+          const v = (logits[i0] * (1 - tx) + logits[i0 + 1] * tx) * (1 - ty) + (logits[i0 + mw] * (1 - tx) + logits[i0 + mw + 1] * tx) * ty;
+          if (v > 0) { const o = (y * SEG_RES + x) * 4; px[o] = r; px[o + 1] = g; px[o + 2] = b; px[o + 3] = 255; }
+        }
+      }
+    }
+    segCtx.putImageData(segImg, 0, 0);
+    const f = SEG_RES / INPUT;
+    return {
+      raster: { canvas: segCanvas, sx: lb.padX * f, sy: lb.padY * f, sw: lb.w * f, sh: lb.h * f },
+      boxes: dets.map(b => ({ ...videoBox(b, lb), score: b.score, cls: b.cls, label: nameOf('segment', b.cls) }))
+    };
+  },
+
+  pose(out, s, lb) {
+    const t = out[s.outputNames[0]], d = t.data, N = t.dims[2];
+    const nk = Math.floor((t.dims[1] - 5) / 3);
+    const people = rawCandidates(t, 4, 1).map(b => {
+      const kpts = [];
+      for (let k = 0; k < nk; k++) {
+        const [x, y] = toVideo(d[(5 + k * 3) * N + b.a], d[(6 + k * 3) * N + b.a], lb);
+        kpts.push({ x, y, v: d[(7 + k * 3) * N + b.a] });
+      }
+      return { ...videoBox(b, lb), score: b.score, cls: 0, label: 'person', kpts };
+    });
+    return { people };
+  },
+
+  obb(out, s, lb) {
+    const t = out[s.outputNames[0]], d = t.data, N = t.dims[2], nCls = t.dims[1] - 5;
+    const angleRow = 4 + nCls;
+    const cands = [];
+    for (let a = 0; a < N; a++) {
+      let best = 0, bc = 0;
+      for (let c = 0; c < nCls; c++) { const v = d[(4 + c) * N + a]; if (v > best) { best = v; bc = c; } }
+      if (best < state.conf) continue;
+      const cx = d[a], cy = d[N + a], w = d[2 * N + a], h = d[3 * N + a], r = d[angleRow * N + a];
+      const cos = Math.cos(r), sin = Math.sin(r);
+      const v1 = [w / 2 * cos, w / 2 * sin], v2 = [-h / 2 * sin, h / 2 * cos];
+      const pts = [[cx + v1[0] + v2[0], cy + v1[1] + v2[1]], [cx + v1[0] - v2[0], cy + v1[1] - v2[1]],
+                   [cx - v1[0] - v2[0], cy - v1[1] - v2[1]], [cx - v1[0] + v2[0], cy - v1[1] + v2[1]]];
+      const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+      cands.push({ cls: bc, score: best, pts, cx, cy, w, h, r, x1: Math.min(...xs), y1: Math.min(...ys), x2: Math.max(...xs), y2: Math.max(...ys) });
+    }
+    const kept = nms(cands);
+    return {
+      polys: kept.map(c => ({
+        score: c.score,
+        cls: c.cls,
+        label: nameOf('obb', c.cls),
+        angleDeg: Math.round(c.r * 180 / Math.PI),
+        center: toVideo(c.cx, c.cy, lb),
+        pts: c.pts.map(p => toVideo(p[0], p[1], lb))
+      }))
+    };
+  },
+
+  classify(out, s, lb) {
+    const d = out[s.outputNames[0]].data;
+    const top = [];
+    for (let i = 0; i < d.length; i++) {
+      if (top.length < 5 || d[i] > top[top.length - 1].p) {
+        top.push({ i, p: d[i] }); top.sort((a, b) => b.p - a.p); if (top.length > 5) top.pop();
+      }
+    }
+    return {
+      top: top.map(t => ({ name: nameOf('classify', t.i), p: t.p })),
+      cropX: lb ? lb.cropX : 0,
+      cropY: lb ? lb.cropY : 0,
+      cropSize: lb ? lb.cropSize : 0
+    };
+  },
+
+  semantic(out, s, lb) {
+    const d = out[s.outputNames[0]].data, px = mapImg.data, counts = new Map();
+    const alpha = 255;
+    for (let y = 0; y < INPUT; y++) {
+      const inside = y >= lb.padY && y < lb.padY + lb.h;
+      for (let x = 0; x < INPUT; x++) {
+        const i = y * INPUT + x, id = d[i], col = CITYSCAPES_COLORS[id] || [255, 255, 255], o = i * 4;
+        px[o] = col[0]; px[o + 1] = col[1]; px[o + 2] = col[2]; px[o + 3] = alpha;
+        if (inside && x >= lb.padX && x < lb.padX + lb.w) counts.set(id, (counts.get(id) || 0) + 1);
+      }
+    }
+    mapCtx.putImageData(mapImg, 0, 0);
+    const total = lb.w * lb.h;
+    const legend = [...counts].filter(([, n]) => n / total > 0.01).sort((a, b) => b[1] - a[1])
+      .map(([id, n]) => ({ name: nameOf('semantic', id), color: CITYSCAPES_COLORS[id] || [255, 255, 255], share: n / total }));
+    return { raster: { canvas: mapCanvas, sx: lb.padX, sy: lb.padY, sw: lb.w, sh: lb.h }, legend };
+  },
+
+  depth(out, s, lb) {
+    const d = out[s.outputNames[0]].data, px = mapImg.data;
+    let min = Infinity, max = -Infinity;
+    for (let y = lb.padY; y < lb.padY + lb.h; y++) for (let x = lb.padX; x < lb.padX + lb.w; x++) {
+      const v = d[y * INPUT + x]; if (v < min) min = v; if (v > max) max = v;
+    }
+    const range = max - min || 1;
+    for (let i = 0; i < INPUT * INPUT; i++) {
+      const k = Math.max(0, Math.min(255, Math.round(((d[i] - min) / range) * 255))) * 3, o = i * 4;
+      px[o] = DEPTH_LUT[k]; px[o + 1] = DEPTH_LUT[k + 1]; px[o + 2] = DEPTH_LUT[k + 2]; px[o + 3] = 255;
+    }
+    mapCtx.putImageData(mapImg, 0, 0);
+    return { raster: { canvas: mapCanvas, sx: lb.padX, sy: lb.padY, sw: lb.w, sh: lb.h }, min, max };
+  }
+};
+
+async function infer() {
+  if (state.busy || !state.cameraReady || video.readyState < 2 || !video.videoWidth) return;
+  const task = state.task, backend = state.backend, key = `${task}|${backend}`;
+  const session = state.sessions.get(key);
+  if (!session) {
+    if (!state.loading.has(key) && !state.failed.has(task)) ensureSession();
+    return;
+  }
+  state.busy = true;
+  try {
+    const { tensor, lb } = preprocess(task);
+    const t0 = performance.now();
+    const out = await session.run({ [session.inputNames[0]]: tensor });
+    stats.lastMs = performance.now() - t0;
+    if (task !== state.task || backend !== state.backend) return;
+    state.result = { task, ...DECODE[task](out, session, lb) };
+    stats.infers++;
+    renderSide();
+  } catch (err) {
+    if (backend === 'webgpu') fallbackToWasm(err);
+    else showMessage('infer', `Model failed`, (err && err.message) || String(err));
+  } finally {
+    state.busy = false;
+  }
+}
+
+let lw = 2, fontPx = 14;
+const mx = x => (state.mirror ? canvas.width - x : x);
+
+function roundRect(c, x, y, w, h, r, fill, stroke) {
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+  c.closePath();
+  if (fill) c.fill();
+  if (stroke) c.stroke();
+}
+
+function drawRaster(r) {
+  ctx.save();
+  ctx.globalAlpha = state.opacity;
+  ctx.imageSmoothingEnabled = true;
+  if (state.mirror) { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
+  ctx.drawImage(r.canvas, r.sx, r.sy, r.sw, r.sh, 0, 0, canvas.width, canvas.height);
+  ctx.restore();
+}
+
+function drawLabel(text, x, y, color) {
+  ctx.font = `600 ${fontPx}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+  const w = ctx.measureText(text).width + fontPx * 0.8, h = fontPx * 1.5;
+  x = Math.max(0, Math.min(canvas.width - w, x));
+  y = Math.max(h, y);
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y - h, w, h);
+  ctx.fillStyle = '#0b0f19';
+  ctx.fillText(text, x + fontPx * 0.4, y - fontPx * 0.4);
+}
+
+function drawBox(b, fill) {
+  const color = colorOf(b.cls), x1 = Math.min(mx(b.x1), mx(b.x2)), x2 = Math.max(mx(b.x1), mx(b.x2));
+  if (fill) { ctx.fillStyle = color + '22'; ctx.fillRect(x1, b.y1, x2 - x1, b.y2 - b.y1); }
+  ctx.strokeStyle = color; ctx.lineWidth = lw;
+  ctx.strokeRect(x1, b.y1, x2 - x1, b.y2 - b.y1);
+  drawLabel(`${b.label} ${Math.round(b.score * 100)}%`, x1 - lw / 2, b.y1, color);
+}
+
+function drawResult(r) {
+  switch (r.task) {
+    case 'detect': r.boxes.forEach(b => drawBox(b, true)); break;
+    case 'segment': drawRaster(r.raster); r.boxes.forEach(b => drawBox(b, false)); break;
+    case 'semantic': case 'depth': drawRaster(r.raster); break;
+    case 'pose':
+      r.people.forEach(p => {
+        drawBox(p, false);
+        ctx.lineWidth = lw * 1.5; ctx.lineCap = 'round';
+        for (const [a, b] of SKELETON) {
+          const A = p.kpts[a], B = p.kpts[b];
+          if (!A || !B || A.v < 0.5 || B.v < 0.5) continue;
+          ctx.strokeStyle = limbColor(a, b);
+          ctx.beginPath(); ctx.moveTo(mx(A.x), A.y); ctx.lineTo(mx(B.x), B.y); ctx.stroke();
+        }
+        for (const k of p.kpts) {
+          if (k.v < 0.5) continue;
+          ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(mx(k.x), k.y, lw * 2.2, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#ff6b8b'; ctx.beginPath(); ctx.arc(mx(k.x), k.y, lw * 1.3, 0, Math.PI * 2); ctx.fill();
+        }
+      });
+      break;
+
+    case 'obb':
+      if (!r.polys || r.polys.length === 0) {
+        ctx.save();
+        const hint = `OBB scanning • DOTA classes (vehicles/ships/fields) • Lower confidence (${state.conf.toFixed(2)}) or angle an object`;
+        ctx.font = `500 ${Math.max(12, fontPx * 0.82)}px system-ui, sans-serif`;
+        const tw = ctx.measureText(hint).width + 24;
+        const hx = Math.max(10, (canvas.width - tw) / 2), hy = canvas.height - 24;
+        ctx.fillStyle = 'rgba(15, 20, 32, 0.82)';
+        ctx.strokeStyle = 'rgba(255, 196, 107, 0.6)';
+        ctx.lineWidth = 1;
+        roundRect(ctx, hx, hy - 20, tw, 28, 6, true, true);
+        ctx.fillStyle = '#ffc46b';
+        ctx.fillText(hint, hx + 12, hy);
+        ctx.restore();
+      } else {
+        r.polys.forEach(p => {
+          const color = colorOf(p.cls);
+          ctx.beginPath();
+          p.pts.forEach(([x, y], i) => (i ? ctx.lineTo(mx(x), y) : ctx.moveTo(mx(x), y)));
+          ctx.closePath();
+          ctx.fillStyle = color + '2b'; ctx.fill();
+          ctx.strokeStyle = color; ctx.lineWidth = lw * 1.2; ctx.stroke();
+
+          if (p.center && p.pts.length >= 2) {
+            const [cx, cy] = p.center;
+            const [p0x, p0y] = p.pts[0], [p1x, p1y] = p.pts[1];
+            const midTopX = (p0x + p1x) / 2, midTopY = (p0y + p1y) / 2;
+            ctx.save();
+            ctx.strokeStyle = '#ffffff'; ctx.lineWidth = lw * 0.8;
+            ctx.beginPath(); ctx.moveTo(mx(cx), cy); ctx.lineTo(mx(midTopX), midTopY); ctx.stroke();
+            ctx.restore();
+          }
+
+          const top = p.pts.reduce((m, q) => (q[1] < m[1] ? q : m));
+          const degStr = typeof p.angleDeg === 'number' ? ` (${p.angleDeg}°)` : '';
+          drawLabel(`${p.label} ${Math.round(p.score * 100)}%${degStr}`, mx(top[0]), top[1], color);
+        });
+      }
+      break;
+
+    case 'classify': {
+      if (!r.top || r.top.length === 0) break;
+      ctx.save();
+
+      // Draw center crop focus frame
+      if (r.cropSize) {
+        const cx1 = mx(r.cropX + (state.mirror ? r.cropSize : 0));
+        const cx2 = mx(r.cropX + (state.mirror ? 0 : r.cropSize));
+        const rx = Math.min(cx1, cx2), rw = Math.abs(cx2 - cx1);
+        ctx.strokeStyle = 'rgba(122, 162, 255, 0.45)';
+        ctx.lineWidth = lw;
+        ctx.setLineDash([8, 6]);
+        ctx.strokeRect(rx, r.cropY, rw, r.cropSize);
+        ctx.setLineDash([]);
+
+        // Bracket corners
+        const cLen = Math.min(32, rw * 0.15);
+        ctx.strokeStyle = '#7aa2ff';
+        ctx.lineWidth = lw * 1.5;
+        ctx.beginPath(); ctx.moveTo(rx, r.cropY + cLen); ctx.lineTo(rx, r.cropY); ctx.lineTo(rx + cLen, r.cropY); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(rx + rw - cLen, r.cropY); ctx.lineTo(rx + rw, r.cropY); ctx.lineTo(rx + rw, r.cropY + cLen); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(rx, r.cropY + r.cropSize - cLen); ctx.lineTo(rx, r.cropY + r.cropSize); ctx.lineTo(rx + cLen, r.cropY + r.cropSize); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(rx + rw - cLen, r.cropY + r.cropSize); ctx.lineTo(rx + rw, r.cropY + r.cropSize); ctx.lineTo(rx + rw, r.cropY + r.cropSize - cLen); ctx.stroke();
+
+        // Bottom-inside badge to avoid HUD clash
+        const top1 = r.top[0];
+        const badgeText = `${top1.name} • ${(top1.p * 100).toFixed(1)}%`;
+        ctx.font = `700 ${fontPx}px system-ui, sans-serif`;
+        const bw = ctx.measureText(badgeText).width + fontPx * 1.4, bh = fontPx * 1.8;
+        const bx = Math.max(rx + 8, Math.min(rx + rw - bw - 8, rx + (rw - bw) / 2));
+        const by = r.cropY + r.cropSize - 14;
+        ctx.fillStyle = 'rgba(15, 20, 32, 0.9)';
+        ctx.strokeStyle = '#5fd3a0';
+        ctx.lineWidth = 1.5;
+        roundRect(ctx, bx, by - bh, bw, bh, 8, true, true);
+        ctx.fillStyle = '#5fd3a0';
+        ctx.fillText(badgeText, bx + fontPx * 0.7, by - fontPx * 0.55);
+      }
+      ctx.restore();
+      break;
+    }
+  }
+}
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function renderSide() {
+  const r = state.result;
+  if (!r || !['classify', 'semantic', 'depth'].includes(r.task)) { ui.side.hidden = true; return; }
+  ui.side.hidden = false;
+  if (r.task === 'classify') {
+    ui.side.innerHTML = `<h2>Top 5 (ImageNet)</h2>` + r.top.map(t => `
+      <div class="bar"><div class="row"><b>${esc(t.name)}</b><i>${(t.p * 100).toFixed(1)}%</i></div>
+      <div class="track"><div class="fill" style="width:${(t.p * 100).toFixed(1)}%"></div></div></div>`).join('');
+  } else if (r.task === 'semantic') {
+    ui.side.innerHTML = `<h2>In view</h2><div class="chips">` + (r.legend.length ? r.legend.map(l =>
+      `<span class="chip"><i style="background:rgb(${l.color.join(',')})"></i>${esc(l.name)} <small>${Math.round(l.share * 100)}%</small></span>`).join('')
+      : '<span class="chip">–</span>') + `</div>`;
+  } else {
+    const grad = DEPTH_STOPS.map(c => `rgb(${c.join(',')})`).join(',');
+    ui.side.innerHTML = `<h2>Depth</h2><div class="gradient" style="background:linear-gradient(90deg,${grad})"></div>
+      <div class="ends"><span>near ≈ ${r.min.toFixed(1)} m</span><span>far ≈ ${r.max.toFixed(1)} m</span></div>`;
+  }
+}
+
+function loop() {
+  requestAnimationFrame(loop);
+  if (!state.cameraReady || video.readyState < 2 || !video.videoWidth) return;
+  if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    lw = Math.max(2, canvas.width / 400); fontPx = Math.max(12, Math.round(canvas.width / 60));
+  }
+  ctx.save();
+  if (state.mirror) { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  ctx.restore();
+  if (state.result && state.result.task === state.task) drawResult(state.result);
+
+  stats.frames++;
+  const now = performance.now();
+  if (now - stats.t0 >= 1000) {
+    stats.fps = (stats.frames * 1000) / (now - stats.t0);
+    stats.ifps = (stats.infers * 1000) / (now - stats.t0);
+    stats.frames = 0; stats.infers = 0; stats.t0 = now;
+    updateHud();
+  }
+  if (++state.frame % state.every === 0) infer();
+}
+
+function updateHud() {
+  ui.hudTask.textContent = `Task: ${TASKS[state.task].label}`;
+  ui.hudBackend.textContent = state.backend === 'webgpu' ? 'Backend: WebGPU'
+    : `Backend: WASM (${wasmThreads} thread${wasmThreads > 1 ? 's' : ''})`;
+  const ready = state.sessions.has(`${state.task}|${state.backend}`);
+  ui.hudFps.textContent = `FPS: video ${stats.fps.toFixed(0)} · model ${ready ? stats.ifps.toFixed(1) : '–'}${ready && stats.lastMs ? ` (${Math.round(stats.lastMs)} ms)` : ''}`;
+}
+
+ui.task.addEventListener('change', () => {
+  state.task = ui.task.value;
+  state.result = null;
+  state.failed.delete(state.task);
+  clearMessage('model'); clearMessage('infer');
+
+  if (state.task === 'obb') {
+    if (state.conf > 0.20) {
+      state.conf = 0.15;
+      ui.conf.value = '0.15';
+      ui.confOut.textContent = '0.15';
+    }
+  } else if (state.task === 'detect' || state.task === 'segment') {
+    if (state.conf < 0.20) {
+      state.conf = 0.30;
+      ui.conf.value = '0.30';
+      ui.confOut.textContent = '0.30';
+    }
+  }
+
+  ui.taskNote.textContent = TASKS[state.task].note || '';
+  renderSide(); updateHud(); updateLoading();
+  ensureSession();
+});
+ui.gpu.addEventListener('change', () => {
+  state.backend = ui.gpu.checked ? 'webgpu' : 'wasm';
+  if (ui.gpu.checked) clearMessage('gpu');
+  state.result = null;
+  renderSide(); updateHud(); updateLoading();
+  ensureSession();
+});
+ui.every.addEventListener('change', () => { state.every = +ui.every.value; });
+ui.conf.addEventListener('input', () => { state.conf = +ui.conf.value; ui.confOut.textContent = state.conf.toFixed(2); });
+ui.opacity.addEventListener('input', () => { state.opacity = +ui.opacity.value; ui.opacityOut.textContent = `${Math.round(state.opacity * 100)}%`; });
+ui.mirror.addEventListener('change', () => { state.mirror = ui.mirror.checked; });
+ui.restartCam.addEventListener('click', startCamera);
+
+async function init() {
+  ui.taskNote.textContent = TASKS[state.task].note || '';
+  if (!checkSupport()) { ui.camMsg.hidden = true; return; }
+  setupOrt();
+  updateHud();
+
+  const metaCandidates = [
+    './models_meta.json',
+    '../models_meta.json',
+    '/models_meta.json',
+    './static/models_meta.json',
+    '/static/models_meta.json'
+  ];
+  for (const url of metaCandidates) {
+    try {
+      const r = await fetch(url);
+      if (r.ok) {
+        state.meta = await r.json();
+        break;
+      }
+    } catch (_) {}
+  }
+
+  ensureSession();
+  await startCamera();
+  requestAnimationFrame(loop);
+}
+init();
+</script>
+</body>
+</html>
