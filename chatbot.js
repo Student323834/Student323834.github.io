@@ -822,7 +822,7 @@ class ChatBot {
         if (recentHistory.length === 0) {
             // If no history, show welcome message
             setTimeout(() => {
-                this.addMessage("Hello! I'm Prof. Luan's AI course assistant. Do you have any questions?", 'ai');
+                this.addMessage("Hello! I'm Michelle's assistant. Do you have any questions?", 'ai');
             }, 1000);
         }
     }
