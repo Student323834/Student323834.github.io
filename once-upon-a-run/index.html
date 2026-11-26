@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Once Upon a Run – A Fairytale Adventure</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍄</text></svg>" />
+    <script type="module" crossorigin src="./assets/index-CHUI5tYn.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-B8Bs2OCf.css">
+  </head>
+  <body>
+    <div id="game-root"></div>
+
+    <div id="ui">
+      <!-- ============ HUD ============ -->
+      <div id="hud" class="hidden">
+        <div class="hud-left">
+          <div class="hud-score"><span id="hud-score">0</span></div>
+          <div class="hud-sub"><span id="hud-distance">0</span> m · <span id="hud-world">The Swamp</span></div>
+        </div>
+        <div class="hud-center">
+          <div class="guard-label">👑 Royal Guard</div>
+          <div class="guard-bar"><div id="guard-fill"></div><div class="guard-runner">🏃</div></div>
+        </div>
+        <div class="hud-right">
+          <div class="hud-pill">🪙 <span id="hud-coins">0</span></div>
+          <div class="hud-pill" title="Treasures: crystals, stars, crowns, keys">✨ <span id="hud-treasure">0</span></div>
+          <button id="btn-pause" class="icon-btn" title="Pause (P) · Esc = back to start page">⏸</button>
+        </div>
+        <div class="hud-bottom-left">
+          <div id="hud-shield" class="ability-ring" title="Magic shield – show both hands 🙌">
+            <div class="ring-inner">🛡️</div>
+          </div>
+          <div id="hud-sprint" class="ability-ring sprint-ring" title="Sprint (peace sign ✌️)">
+            <div class="ring-inner">⚡</div>
+          </div>
+          <div id="hud-ability" class="ability-chip"><span id="hud-character">Brumm</span> <span id="hud-ability-icon">💚</span></div>
+        </div>
+      </div>
+
+      <!-- ============ MAIN MENU ============ -->
+      <div id="screen-start" class="screen">
+        <div class="title-block">
+          <h1 class="game-title"><span>Once Upon</span><span>a Run</span></h1>
+          <div class="game-subtitle">A Fairytale Adventure</div>
+        </div>
+        <div class="main-menu">
+          <nav class="menu-buttons">
+            <button id="btn-start" class="btn btn-primary btn-big">▶ Start Game</button>
+            <button id="btn-characters" class="btn btn-secondary">🧌 Character Select</button>
+            <button id="btn-howto" class="btn btn-secondary">📜 How to Play</button>
+            <button id="btn-settings" class="btn btn-secondary">⚙️ Settings</button>
+            <button id="btn-start-keyboard" class="btn btn-small hidden">⌨️ Play with keyboard (debug)</button>
+          </nav>
+          <div class="menu-info">
+            <div class="menu-chip">🏆 High score <b id="menu-highscore">0</b></div>
+            <div class="menu-chip">Running as <b id="menu-character">Brumm</b> <span id="menu-ability"></span></div>
+          </div>
+          <p class="menu-hint">The pompous little king blames <b>you</b> for the chaos in his kingdom.<br />Escape before his clumsy royal guard catches you!</p>
+        </div>
+      </div>
+
+      <!-- ============ CHARACTER SELECT ============ -->
+      <div id="screen-characters" class="screen hidden">
+        <h2 class="screen-title">Choose your Hero</h2>
+        <div class="char-wrap">
+          <canvas id="char-canvas"></canvas>
+          <div id="char-grid" class="char-grid"></div>
+        </div>
+        <div class="screen-buttons">
+          <button id="btn-char-back" class="btn btn-primary btn-inline">✓ Done</button>
+        </div>
+      </div>
+
+      <!-- ============ HOW TO PLAY ============ -->
+      <div id="screen-howto" class="screen hidden">
+        <h2 class="screen-title">How to Play</h2>
+        <div class="howto-card">
+          <div class="howto-grid">
+            <div class="howto-item"><div class="howto-anim"><div class="anim-lane">🖐</div></div><h3>Change lane</h3><p>Move your hand <b>left</b>, <b>middle</b> or <b>right</b>. Your hand position = your lane.</p></div>
+            <div class="howto-item"><div class="howto-anim"><div class="anim-up">🖐</div></div><h3>Jump</h3><p>Swipe your hand <b>quickly upwards</b>, then bring it back calmly.</p></div>
+            <div class="howto-item"><div class="howto-anim"><div class="anim-down">🖐</div></div><h3>Slide</h3><p>Swipe your hand <b>quickly downwards</b>, then bring it back calmly.</p></div>
+            <div class="howto-item"><div class="howto-anim"><div class="anim-sprint">✌️<span>⚡</span></div></div><h3>Sprint</h3><p>Hold a <b>peace sign</b>. Faster, double distance points – but costs stamina.</p></div>
+            <div class="howto-item"><div class="howto-anim"><div class="anim-shield"><i>🖐</i><i>🖐</i><span>🛡️</span></div></div><h3>Magic shield</h3><p>Show <b>both hands</b> for a moment. Blocks the next hit for 5 s (15 s cooldown).</p></div>
+            <div class="howto-item"><div class="howto-anim"><div class="anim-lost">✋</div></div><h3>Pause</h3><p>Take your hand out of view – the game pauses. Show it again to continue.</p></div>
+          </div>
+          <div class="howto-rules">
+            <div>💥 Hitting an obstacle makes you stumble and the <b>Royal Guard</b> catches up.</div>
+            <div>🏃 Running cleanly lets the guard fall back again.</div>
+            <div>⚠️ Two hits within 5 seconds – or the guard reaching you – means <b>game over</b>.</div>
+            <div>🪙 Coins 10 · 💎 Crystals 25 · ⭐ Stars 50 points + 1 point per metre.</div>
+            <div class="howto-keys">⌨️ Keyboard debug: ← → lanes · ↑/Space jump · ↓ slide · S shield · Shift/F sprint · P pause · Esc back to start page · D debug</div>
+          </div>
+        </div>
+        <div class="screen-buttons"><button id="btn-howto-back" class="btn btn-primary btn-inline">Got it!</button></div>
+      </div>
+
+      <!-- ============ SETTINGS ============ -->
+      <div id="screen-settings" class="screen hidden">
+        <h2 class="screen-title">Settings</h2>
+        <div class="menu-card settings-card">
+          <label class="set-row"><span>🔊 Sound</span><input type="checkbox" id="set-sound" /></label>
+          <label class="set-row"><span>🎵 Music</span><input type="checkbox" id="set-music" /></label>
+          <label class="set-row"><span>Volume</span><input type="range" id="set-volume" min="0" max="1" step="0.05" /></label>
+          <label class="set-row"><span>✋ Gesture sensitivity <small id="set-sens-val"></small></span><input type="range" id="set-sens" min="0.6" max="1.6" step="0.05" /></label>
+          <label class="set-row"><span>✏️ Sketch look</span><input type="checkbox" id="set-sketch" /></label>
+          <label class="set-row"><span>🐞 Debug panel</span><input type="checkbox" id="set-debug" /></label>
+          <label class="set-row"><span>⌨️ Keyboard debug mode</span><input type="checkbox" id="set-keyboard" /></label>
+          <div class="set-buttons">
+            <button id="btn-set-calibrate" class="btn btn-small">✋ Recalibrate hand</button>
+            <button id="btn-set-reset" class="btn btn-small">🗑 Reset high score</button>
+          </div>
+        </div>
+        <div class="screen-buttons"><button id="btn-settings-back" class="btn btn-primary btn-inline">Back</button></div>
+      </div>
+
+      <!-- ============ CALIBRATION ============ -->
+      <div id="screen-calibration" class="screen hidden">
+        <div class="calib-card">
+          <h2>Hand Calibration</h2>
+          <div class="calib-layout">
+            <div class="calib-preview">
+              <canvas id="calib-canvas" width="640" height="480"></canvas>
+              <div id="calib-message" class="calib-message">Starting camera…</div>
+              <div id="calib-progress" class="calib-progress hidden"><div></div></div>
+            </div>
+            <div class="calib-steps">
+              <ol>
+                <li id="step-camera"><span class="check"></span> Camera &amp; AI model</li>
+                <li id="step-hand"><span class="check"></span> Show your hand</li>
+                <li id="step-center"><span class="check"></span> Hold still in a comfortable spot</li>
+                <li id="step-gestures"><span class="check"></span> Try every gesture
+                  <ul class="gesture-tests">
+                    <li id="test-left"><span class="check"></span> ⬅️ Move hand left</li>
+                    <li id="test-right"><span class="check"></span> ➡️ Move hand right</li>
+                    <li id="test-jump"><span class="check"></span> ⬆️ Flick hand up (jump) <span class="count" id="count-jump">0/2</span></li>
+                    <li id="test-slide"><span class="check"></span> ⬇️ Flick hand down (slide) <span class="count" id="count-slide">0/2</span></li>
+                    <li id="test-shield"><span class="check"></span> 🙌 Show both hands (shield)</li>
+                    <li id="test-sprint"><span class="check"></span> ✌️ Show a peace sign (sprint)</li>
+                  </ul>
+                </li>
+              </ol>
+              <div id="calib-result" class="calib-result hidden"></div>
+              <div id="calib-error" class="calib-error hidden"></div>
+              <div class="calib-buttons">
+                <button id="btn-calib-start" class="btn btn-primary" disabled>Start the Run!</button>
+                <button id="btn-calib-skip" class="btn btn-small" disabled>Skip test</button>
+                <button id="btn-calib-recenter" class="btn btn-small">Re-center</button>
+                <button id="btn-calib-retry" class="btn btn-small hidden">Retry camera</button>
+                <button id="btn-calib-back" class="btn btn-small">Back</button>
+              </div>
+              <p class="privacy-note">🔒 All hand tracking runs locally in your browser. No video is uploaded or stored.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ GAME OVER ============ -->
+      <div id="screen-gameover" class="screen hidden">
+        <div class="menu-card gameover-card">
+          <h2 id="go-title">Caught!</h2>
+          <p id="go-reason" class="go-reason"></p>
+          <div class="go-stats">
+            <div><span>Score</span><b id="go-score">0</b></div>
+            <div><span>Distance</span><b id="go-distance">0 m</b></div>
+            <div><span>Treasure</span><b id="go-treasure">0</b></div>
+            <div><span>High score</span><b id="go-high">0</b></div>
+          </div>
+          <div id="go-newhigh" class="go-newhigh hidden">🏆 New high score!</div>
+          <button id="btn-restart" class="btn btn-primary">↻ Run Again</button>
+          <button id="btn-recalibrate" class="btn btn-secondary">✋ Recalibrate</button>
+          <button id="btn-menu" class="btn btn-small">Main Menu</button>
+        </div>
+      </div>
+
+      <!-- ============ OVERLAYS ============ -->
+      <div id="overlay-pause" class="overlay hidden">
+        <div class="menu-card">
+          <h2>Paused</h2>
+          <button id="btn-resume" class="btn btn-primary">▶ Resume</button>
+          <button id="btn-pause-howto" class="btn btn-small">How to Play</button>
+          <button id="btn-pause-menu" class="btn btn-small">Main Menu</button>
+        </div>
+      </div>
+      <div id="overlay-handlost" class="overlay hidden">
+        <div class="handlost-box">
+          <div class="handlost-icon">✋</div>
+          <div>Show your hand to continue</div>
+        </div>
+      </div>
+      <div id="countdown" class="countdown hidden"></div>
+      <div id="world-banner" class="world-banner hidden"><small id="wb-number">World 2</small><span id="wb-name">The Fairytale Kingdom</span></div>
+      <div class="vignette"></div>
+      <div id="flash" class="flash"></div>
+      <div id="speedlines" class="speedlines"></div>
+      <div id="popups"></div>
+
+      <!-- ============ WEBCAM WIDGET ============ -->
+      <div id="webcam-widget" class="hidden">
+        <canvas id="webcam-canvas" width="240" height="180"></canvas>
+        <div class="webcam-status">
+          <span id="track-dot" class="dot"></span>
+          <span id="track-status">No hand</span>
+          <span id="track-gesture" class="gesture-label">–</span>
+        </div>
+      </div>
+
+      <button id="btn-debug" class="debug-toggle" title="Toggle debug panel (D)">🐞</button>
+      <div id="debug-panel" class="hidden"></div>
+    </div>
+
+  </body>
+</html>
